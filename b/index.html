@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>O seu bilhete</title>
+<link rel="stylesheet" href="../comum.css">
+<style>
+  .bilhete{background:#fff;border:2px solid var(--borda);border-radius:20px;overflow:hidden;max-width:420px;margin:16px auto}
+  .bilhete.esp{border-color:var(--dourado);box-shadow:0 0 0 4px #f3e9c9 inset}
+  .cab{padding:18px 20px 12px;border-left:10px solid var(--azul)}
+  .qr{display:flex;flex-direction:column;align-items:center;padding:10px 20px 18px;border-top:2px dashed var(--borda)}
+  .qr canvas,.qr img{width:240px;height:240px}
+  .cod{font-size:1.5rem;font-weight:800;letter-spacing:.25em;margin-top:8px}
+  .selo{display:inline-block;padding:4px 12px;border-radius:999px;font-weight:800}.valido{background:#dcfce7;color:#14532d}.usado{background:#fee2e2;color:#7f1d1d}.pend{background:#fef3c7;color:#78350f}
+  @media print{body{background:#fff}.btn,.naoimprimir{display:none}}
+</style>
+</head>
+<body>
+<div class="contentor">
+  <div id="erro" class="erro oculto"></div>
+  <div id="bilhete" class="bilhete oculto">
+    <div class="cab" id="cab">
+      <div class="mudo pequeno" id="org"></div>
+      <h1 id="evento"></h1>
+      <div id="quando"></div>
+      <div class="mudo" id="local"></div>
+      <p><span class="etiqueta" id="tipo"></span> <span id="estado" class="selo"></span></p>
+      <div><span class="mudo pequeno">Portador</span><br><b id="portador"></b></div>
+    </div>
+    <div class="qr">
+      <div id="qr"></div>
+      <div class="cod" id="codigo"></div>
+      <div class="mudo pequeno centro">Apresente este QR à entrada. Bilhete pessoal, de entrada única.</div>
+    </div>
+  </div>
+  <div class="naoimprimir centro col" id="accoes" style="max-width:420px;margin:0 auto">
+    <a id="imgLink" class="btn sec oculto" download>Guardar imagem do bilhete</a>
+    <button class="btn sec" onclick="print()">Imprimir</button>
+    <p class="mudo pequeno">Dúvidas? Contacte o organizador pelo WhatsApp em que recebeu este bilhete.</p>
+  </div>
+</div>
+<script src="../config.js"></script>
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { C, $, esc, data, param, mostrarErro } from "../comum.js";
+const sb = createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
+const t = (param("t") || "").toLowerCase();
+if (!/^[0-9a-f]{32}$/.test(t)) mostrarErro($("#erro"), "Ligação inválida.");
+else {
+  const { data: b, error } = await sb.rpc("fn_bilhete_publico", { p_token: t });
+  if (error || !b) mostrarErro($("#erro"), "Bilhete não encontrado.");
+  else {
+    $("#org").textContent = b.organizacao; $("#evento").textContent = b.evento; $("#quando").textContent = data(b.inicio_em); $("#local").textContent = b.local;
+    $("#tipo").textContent = b.tipo; $("#portador").textContent = b.portador || "—"; $("#codigo").textContent = b.codigo;
+    $("#cab").style.borderLeftColor = b.convite_tipo === "convite_especial" ? "#b8860b" : b.cor_hex;
+    if (b.convite_tipo === "convite_especial") $("#bilhete").classList.add("esp");
+    const e = $("#estado"); e.textContent = { valido: "Válido", utilizado: "Já utilizado", anulado: "Anulado", por_pagar: "Por pagar" }[b.estado] || b.estado;
+    e.className = "selo " + ({ valido: "valido", utilizado: "usado", anulado: "usado", por_pagar: "pend" }[b.estado] || "");
+    const QR = (await import("https://esm.sh/qrcode@1.5.4")).default;
+    const canvas = document.createElement("canvas"); await QR.toCanvas(canvas, location.href.split("#")[0], { width: 240, margin: 1 }); $("#qr").appendChild(canvas);
+    if (b.imagem_url) { $("#imgLink").href = b.imagem_url; $("#imgLink").classList.remove("oculto"); }
+    $("#bilhete").classList.remove("oculto"); document.title = `Bilhete · ${b.evento}`;
+  }
+}
+</script>
+</body>
+</html>

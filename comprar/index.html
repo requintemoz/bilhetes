@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comprar bilhetes</title>
+<link rel="stylesheet" href="../comum.css">
+<style>
+  .capa{width:100%;border-radius:14px;max-height:280px;object-fit:cover}
+  .tipo{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--borda)}
+  .tipo:last-child{border:0}.qtd{display:flex;align-items:center;gap:6px}.qtd button{width:40px;height:40px;border-radius:10px;border:1px solid var(--borda);background:#fff;font-size:1.2rem}.qtd span{min-width:24px;text-align:center;font-weight:700}
+  .sobe{font-size:.8rem;color:#b45309}
+  .termos{max-height:200px;overflow:auto;background:#fafafa;border:1px solid var(--borda);border-radius:10px;padding:4px 14px;font-size:.9rem}
+  .pag{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pag label{border:2px solid var(--borda);border-radius:12px;padding:12px;cursor:pointer;display:flex;gap:8px;align-items:center;margin:0}.pag input{width:auto;min-height:0}.pag label:has(input:checked){border-color:var(--azul);background:#eef2ff}
+  .faq details{border-bottom:1px solid var(--borda);padding:8px 0}
+</style>
+</head>
+<body>
+<div class="contentor">
+  <div id="erro" class="erro oculto"></div>
+  <div id="ev" class="oculto">
+    <img id="capa" class="capa oculto" alt="">
+    <h1 id="nome"></h1>
+    <p><b id="quando"></b> · <span id="local"></span><br><span class="mudo pequeno" id="org"></span></p>
+    <p id="descricao"></p>
+
+    <div class="cartao" id="passo1">
+      <h2>1. Bilhetes</h2>
+      <div id="tipos"></div>
+      <p class="linha"><input id="promo" placeholder="Código promocional (opcional)" style="flex:1"></p>
+      <p class="linha" style="justify-content:space-between"><b>Total</b><b id="total">0 MT</b></p>
+    </div>
+
+    <div class="cartao" id="passo2">
+      <h2>2. Os seus dados</h2>
+      <label>Nome completo</label><input id="cNome" autocomplete="name">
+      <label>Telemóvel (WhatsApp)</label><input id="cTel" inputmode="tel" placeholder="84 123 4567" autocomplete="tel">
+      <label>Email (opcional)</label><input id="cEmail" type="email" autocomplete="email">
+      <p class="mudo pequeno">O bilhete é enviado por WhatsApp para este número.</p>
+    </div>
+
+    <div class="cartao" id="passo3">
+      <h2>3. Pagamento</h2>
+      <div class="pag">
+        <label><input type="radio" name="meio" value="mpesa" checked> M-Pesa</label>
+        <label><input type="radio" name="meio" value="emola"> e-Mola</label>
+      </div>
+      <p class="mudo pequeno">Receberá o pedido de pagamento no telemóvel; escreva o PIN só na aplicação da operadora.</p>
+    </div>
+
+    <div class="cartao" id="passo4">
+      <h2>4. Termos</h2>
+      <details><summary id="termosTitulo"></summary><div class="termos" id="termosTexto"></div></details>
+      <details><summary id="privTitulo"></summary><div class="termos" id="privTexto"></div></details>
+      <div class="cx" style="margin-top:12px"><input type="checkbox" id="cTermos"><label for="cTermos" style="margin:0;font-weight:500">Li e aceito os Termos e Condições e a Política de Privacidade <b>(obrigatório)</b></label></div>
+      <div class="cx"><input type="checkbox" id="cWa"><label for="cWa" style="margin:0;font-weight:500">Quero receber novidades sobre eventos por WhatsApp (opcional)</label></div>
+      <div class="cx"><input type="checkbox" id="cSms"><label for="cSms" style="margin:0;font-weight:500">Quero receber por SMS (opcional)</label></div>
+      <p><button class="btn grande" id="btnComprar">Reservar e pagar</button></p>
+      <p id="erroForm" class="erro oculto"></p>
+    </div>
+
+    <div class="cartao oculto" id="pagamento"></div>
+
+    <div class="cartao faq oculto" id="faq"><h2>Perguntas frequentes</h2><div id="faqLista"></div></div>
+  </div>
+</div>
+<script src="../config.js"></script>
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { C, $, $$, esc, data, mt, md, param, mostrarErro, telemovelValido } from "../comum.js";
+const sb = createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
+const slug = param("e") || "";
+let ev, qtds = {};
+async function carregar() {
+  const { data: e, error } = await sb.rpc("fn_evento_publico", { p_slug: slug });
+  if (error || !e) { mostrarErro($("#erro"), "Evento não encontrado ou sem venda aberta."); return; }
+  ev = e; document.title = `Bilhetes · ${e.nome}`;
+  $("#nome").textContent = e.nome; $("#quando").textContent = data(e.inicio_em); $("#local").textContent = e.local; $("#org").textContent = `Organização: ${e.organizacao?.nome || ""} · Entrada só para maiores de ${e.idade_minima}`;
+  $("#descricao").textContent = e.descricao || ""; if (e.imagem_url) { $("#capa").src = e.imagem_url; $("#capa").classList.remove("oculto"); }
+  $("#termosTitulo").textContent = e.termos?.titulo || "Termos e Condições"; $("#termosTexto").innerHTML = md(e.termos?.texto_md);
+  $("#privTitulo").textContent = e.privacidade?.titulo || "Política de Privacidade"; $("#privTexto").innerHTML = md(e.privacidade?.texto_md);
+  if (e.faq?.length) { $("#faq").classList.remove("oculto"); $("#faqLista").innerHTML = e.faq.map((f) => `<details><summary>${esc(f.pergunta)}</summary><p>${esc(f.resposta)}</p></details>`).join(""); }
+  desenharTipos(); $("#ev").classList.remove("oculto");
+  if (e.estado === "esgotado" || e.disponivel <= 0) { $("#tipos").innerHTML = "<p class='aviso'>Esgotado.</p>"; $("#btnComprar").disabled = true; }
+}
+function desenharTipos() {
+  $("#tipos").innerHTML = ev.precos.filter((p) => p.venda_aberta).map((p) => {
+    const sobe = p.proximo_preco && p.lote_termina_em ? `<div class="sobe">Sobe para ${mt(p.proximo_preco)} ${p.lote_termina_apos_qtd ? `ao esgotar ${p.lote_termina_apos_qtd - p.vendidos} bilhetes ou ` : ""}a ${data(p.lote_termina_em)}</div>` : "";
+    const esg = p.disponivel <= 0;
+    return `<div class="tipo"><div><b>${esc(p.nome)}</b> <span class="etiqueta">${mt(p.preco)}</span>${p.lote ? ` <span class="mudo pequeno">${esc(p.lote)}</span>` : ""}${sobe}${esg ? "<div class='sobe'>Esgotado</div>" : ""}</div>
+      <div class="qtd"><button data-t="${p.tipo_bilhete_id}" data-d="-1" ${esg ? "disabled" : ""}>−</button><span id="q-${p.tipo_bilhete_id}">${qtds[p.tipo_bilhete_id] || 0}</span><button data-t="${p.tipo_bilhete_id}" data-d="1" ${esg ? "disabled" : ""}>+</button></div></div>`;
+  }).join("");
+  $$("#tipos button").forEach((b) => b.onclick = () => { const t = b.dataset.t; const p = ev.precos.find((x) => x.tipo_bilhete_id === t); qtds[t] = Math.max(0, Math.min(p.disponivel, 10, (qtds[t] || 0) + Number(b.dataset.d))); $("#q-" + t).textContent = qtds[t]; total(); });
+  total();
+}
+function total() { let s = 0; for (const p of ev.precos) s += (qtds[p.tipo_bilhete_id] || 0) * Number(p.preco); $("#total").textContent = mt(s); return s; }
+
+$("#btnComprar").onclick = async () => {
+  const erro = $("#erroForm"); erro.classList.add("oculto");
+  const itens = Object.entries(qtds).filter(([, q]) => q > 0).map(([t, q]) => ({ tipo_bilhete_id: t, quantidade: q }));
+  if (!itens.length) return mostrarErro(erro, "Escolha pelo menos um bilhete.");
+  if ($("#cNome").value.trim().length < 3) return mostrarErro(erro, "Indique o seu nome completo.");
+  if (!telemovelValido($("#cTel").value)) return mostrarErro(erro, "Indique um telemóvel válido (ex. 84 123 4567).");
+  if (!$("#cTermos").checked) return mostrarErro(erro, "É necessário aceitar os termos.");
+  $("#btnComprar").disabled = true;
+  const meio = $("input[name=meio]:checked").value;
+  const { data: r, error } = await sb.rpc("fn_criar_encomenda_online", { p: { evento_id: ev.id, cliente: { telemovel: $("#cTel").value, nome: $("#cNome").value.trim(), email: $("#cEmail").value.trim() },
+    itens, codigo_promo: $("#promo").value.trim() || null, aceita_termos: true, aceita_whatsapp: $("#cWa").checked, aceita_sms: $("#cSms").checked, meio_pagamento: meio }, p_ua: navigator.userAgent.slice(0, 200) });
+  if (error) { mostrarErro(erro, error); $("#btnComprar").disabled = false; return; }
+  for (const id of ["passo1", "passo2", "passo3", "passo4"]) $("#" + id).classList.add("oculto");
+  const pag = $("#pagamento"); pag.classList.remove("oculto");
+  pag.innerHTML = `<h2>Pagamento</h2><p>Reserva feita. Total: <b>${mt(r.total)}</b>${Number(r.desconto) > 0 ? ` (desconto ${mt(r.desconto)})` : ""}. Tem até ${data(r.expira_em, { dateStyle: undefined, timeStyle: "short" })} para pagar.</p><p id="pagEstado" class="aviso">A enviar o pedido de pagamento para o seu telemóvel… confirme com o PIN.</p>`;
+  const resp = await fetch(`${C.SUPABASE_URL}/functions/v1/pagamentos`, { method: "POST", headers: { "Content-Type": "application/json", apikey: C.SUPABASE_ANON_KEY, Authorization: `Bearer ${C.SUPABASE_ANON_KEY}` },
+    body: JSON.stringify({ accao: "iniciar", token_publico: r.token_publico, meio, msisdn: $("#cTel").value }) }).then((x) => x.json()).catch((e) => ({ erro: String(e) }));
+  const est = $("#pagEstado");
+  if (resp.resultado === "pago" || resp.resultado === "ja_paga") { est.className = "ok"; est.innerHTML = "Pagamento confirmado! Os seus bilhetes seguem por WhatsApp. <a href='../t/?o=" + r.token_publico + "'>Ver os meus bilhetes</a>"; }
+  else if (resp.resultado === "manual") { est.className = "aviso"; est.innerHTML = `${esc(resp.instrucoes)}<br><br>Referência: <b>${esc(resp.referencia)}</b>. <a href="../t/?o=${r.token_publico}">Acompanhar o estado</a>`; }
+  else { est.className = "erro"; est.innerHTML = `Não foi possível concluir o pagamento (${esc(resp.erro || resp.codigo || "")}). <button class="btn sec" id="btnRetry">Tentar de novo</button> ou pague manualmente e <a href="../t/?o=${r.token_publico}">acompanhe aqui</a>.`;
+    $("#btnRetry").onclick = () => location.reload(); }
+};
+carregar();
+</script>
+</body>
+</html>

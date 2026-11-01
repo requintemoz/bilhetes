@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e3a8a">
+<title>Porta · Bilhetes CNB</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="../comum.css">
+<style>
+  body{background:#0f172a;color:#fff}
+  .contentor{max-width:560px}
+  .cartao{background:#1e293b;border-color:#334155}
+  input,select{background:#0f172a;color:#fff;border-color:#334155}
+  .topo{position:sticky;top:0;background:#0f172a;z-index:5;padding:10px 0;border-bottom:1px solid #1e293b}
+  .abas{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0}
+  .abas button{background:#1e293b;color:#cbd5e1;border:0;border-radius:10px;padding:12px 4px;font-weight:700;font-size:.9rem}
+  .abas button.act{background:var(--azul);color:#fff}
+  #video{width:100%;border-radius:14px;background:#000;aspect-ratio:1/1;object-fit:cover}
+  .resultado{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px;gap:10px}
+  .resultado.r-ok{background:#15803d}.resultado.r-nao{background:#b91c1c}.resultado.r-aviso{background:#a16207}.resultado.r-esp{background:#92400e}
+  .resultado h1{font-size:2.6rem;margin:0}.resultado .nome{font-size:1.8rem;font-weight:800}.resultado .tipo{font-size:1.4rem}
+  .resultado .cor{width:120px;height:28px;border-radius:14px;border:3px solid #fff;margin:6px 0}
+  .resultado .btn{width:100%;max-width:420px;background:#fff;color:#111827}
+  .estado{display:inline-block;padding:4px 10px;border-radius:999px;font-size:.8rem;font-weight:700}
+  .on{background:#14532d;color:#bbf7d0}.off{background:#7f1d1d;color:#fecaca}
+  .contadores{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.contadores div{background:#0f172a;border-radius:10px;padding:10px;text-align:center}.contadores b{display:block;font-size:1.6rem}
+  .lista div{padding:10px;border-bottom:1px solid #334155}
+  .teclado{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.teclado button{min-height:60px;font-size:1.4rem;background:#0f172a;color:#fff;border:1px solid #334155;border-radius:12px}
+  .pulsar{animation:p 1s infinite}@keyframes p{50%{opacity:.4}}
+</style>
+</head>
+<body>
+<div class="contentor">
+  <div class="topo">
+    <div><b>Porta</b> <span id="evNome" class="mudo"></span></div>
+    <div class="linha"><span id="ligacao" class="estado on">online</span><span id="fila" class="estado" style="background:#1e293b"></span><span id="staffNome" class="mudo"></span></div>
+  </div>
+
+  <!-- 1. Sessão do aparelho -->
+  <section id="ecraLogin" class="cartao">
+    <h2>Iniciar sessão do aparelho</h2>
+    <label>Email da conta de porta</label><input id="email" type="email" autocomplete="username">
+    <label>Palavra-passe</label><input id="senha" type="password" autocomplete="current-password">
+    <p><button class="btn grande" id="btnLogin">Entrar</button></p>
+    <p id="loginErro" class="erro oculto"></p>
+  </section>
+
+  <!-- 2. PIN da pessoa -->
+  <section id="ecraPin" class="cartao oculto">
+    <h2>Quem está na porta?</h2>
+    <p class="mudo">Introduza o seu PIN pessoal.</p>
+    <input id="pin" type="password" inputmode="numeric" maxlength="6" class="centro" style="font-size:1.6rem;letter-spacing:.5em">
+    <div class="teclado" id="teclado"></div>
+    <p id="pinErro" class="erro oculto"></p>
+  </section>
+
+  <!-- 3. Evento, porta, aparelho -->
+  <section id="ecraConfig" class="cartao oculto">
+    <h2>Configurar</h2>
+    <label>Evento</label><select id="evento"></select>
+    <label>Nome desta porta</label><input id="porta" placeholder="Porta 1">
+    <label>Nome do aparelho</label><input id="dispositivo" placeholder="POS-1">
+    <p><button class="btn grande" id="btnConfig">Descarregar lista e começar</button></p>
+    <p class="mudo pequeno">A lista de bilhetes fica guardada neste aparelho para funcionar sem rede.</p>
+  </section>
+
+  <!-- 4. Operação -->
+  <section id="ecraOp" class="oculto">
+    <div class="abas">
+      <button data-aba="entrada" class="act">Entrada</button>
+      <button data-aba="saida">Saída / Reentrada</button>
+      <button data-aba="procurar">Procurar</button>
+      <button data-aba="mais">Mais</button>
+    </div>
+
+    <div id="abaEntrada">
+      <div class="cartao">
+        <video id="video" playsinline muted></video>
+        <p class="linha"><input id="codigoManual" placeholder="ou código curto (8 letras)" style="text-transform:uppercase"><button class="btn" id="btnCodigo">Validar</button></p>
+      </div>
+      <div class="contadores" id="contadores"></div>
+    </div>
+
+    <div id="abaSaida" class="oculto">
+      <div class="cartao centro">
+        <h2>Aproxime a pulseira</h2>
+        <p class="mudo">Dentro → regista saída. Fora → regista reentrada.</p>
+        <p id="nfcEstadoSaida" class="pulsar">A ler NFC…</p>
+        <p class="linha"><input id="uidManual" placeholder="UID manual (ex. 04A2B3C4D5E680)"><button class="btn sec" id="btnUidManual">Registar</button></p>
+      </div>
+    </div>
+
+    <div id="abaProcurar" class="oculto">
+      <div class="cartao">
+        <p class="linha"><input id="procurarTexto" placeholder="nome, telemóvel ou código"><button class="btn" id="btnProcurar">Procurar</button></p>
+        <p class="mudo pequeno">Confirme a identidade antes de validar sem bilhete.</p>
+        <div class="lista" id="resultadosProcura"></div>
+      </div>
+    </div>
+
+    <div id="abaMais" class="oculto">
+      <div class="cartao col">
+        <button class="btn sec" id="btnSync">Sincronizar agora</button>
+        <button class="btn sec" id="btnManifesto">Actualizar lista de bilhetes</button>
+        <button class="btn sec" id="btnTrocarPin">Trocar de pessoa (PIN)</button>
+        <button class="btn sec" id="btnReconfig">Mudar evento / porta</button>
+        <button class="btn perigo" id="btnSair">Terminar sessão do aparelho</button>
+        <p class="mudo pequeno" id="infoManifesto"></p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="res" class="resultado oculto"></div>
+
+<script src="../config.js"></script>
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+const C = window.CNB_CONFIG;
+const sb = createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
+const $ = (s) => document.querySelector(s);
+const LS = { get: (k, d) => { try { return JSON.parse(localStorage.getItem("porta." + k)) ?? d; } catch { return d; } }, set: (k, v) => localStorage.setItem("porta." + k, JSON.stringify(v)) };
+
+const estado = {
+  staff: LS.get("staff", null), evento: LS.get("evento", null), porta: LS.get("porta", "Porta 1"), dispositivo: LS.get("dispositivo", "POS-1"),
+  manifesto: LS.get("manifesto", null), fila: LS.get("fila", []), online: navigator.onLine, ultimoBilhete: null, aba: "entrada", nfc: null, modoNfc: "ligar",
+};
+const guardar = () => { LS.set("staff", estado.staff); LS.set("evento", estado.evento); LS.set("porta", estado.porta); LS.set("dispositivo", estado.dispositivo); LS.set("manifesto", estado.manifesto); LS.set("fila", estado.fila); };
+
+// ---------- som e vibração ----------
+let ctxAudio; function som(ok) {
+  try { ctxAudio ??= new (window.AudioContext || window.webkitAudioContext)(); const o = ctxAudio.createOscillator(); const g = ctxAudio.createGain();
+    o.connect(g); g.connect(ctxAudio.destination); o.frequency.value = ok ? 1200 : 220; o.type = ok ? "sine" : "square"; g.gain.value = .25;
+    o.start(); o.stop(ctxAudio.currentTime + (ok ? .15 : .5)); } catch {}
+  navigator.vibrate?.(ok ? 80 : [150, 80, 150]);
+}
+
+// ---------- ecrãs ----------
+const ecra = (id) => { for (const e of ["ecraLogin", "ecraPin", "ecraConfig", "ecraOp"]) $("#" + e).classList.toggle("oculto", e !== id); };
+function aba(n) { estado.aba = n; for (const b of document.querySelectorAll(".abas button")) b.classList.toggle("act", b.dataset.aba === n);
+  for (const a of ["Entrada", "Saida", "Procurar", "Mais"]) $("#aba" + a).classList.toggle("oculto", a.toLowerCase() !== n);
+  if (n === "entrada") { iniciarCamara(); estado.modoNfc = "ligar"; } else pararCamara();
+  if (n === "saida") { estado.modoNfc = "mover"; iniciarNfc(); } }
+document.querySelectorAll(".abas button").forEach((b) => b.onclick = () => aba(b.dataset.aba));
+
+function mostrarResultado(classe, titulo, linhas, corHex, extra) {
+  const r = $("#res"); r.className = "resultado r-" + classe;
+  r.innerHTML = `<h1>${titulo}</h1>${corHex ? `<div class="cor" style="background:${corHex}"></div>` : ""}${linhas.map((l) => `<div class="${l.c || ""}">${l.t}</div>`).join("")}${extra || ""}<button class="btn" id="btnFechar">Continuar</button>`;
+  r.classList.remove("oculto"); $("#btnFechar").onclick = fecharResultado; som(classe === "ok" || classe === "esp"); r.scrollTop = 0;
+}
+function fecharResultado() { $("#res").classList.add("oculto"); estado.ultimoBilhete = null; ultimaLeitura = ""; }
+
+// ---------- ligação ----------
+function actualizarLigacao() { $("#ligacao").textContent = estado.online ? "online" : "sem rede"; $("#ligacao").className = "estado " + (estado.online ? "on" : "off");
+  $("#fila").textContent = estado.fila.length ? `${estado.fila.length} por sincronizar` : ""; }
+window.addEventListener("online", () => { estado.online = true; actualizarLigacao(); sincronizar(); });
+window.addEventListener("offline", () => { estado.online = false; actualizarLigacao(); });
+
+// RPC com tempo limite; se a rede falhar devolve null para cair no modo offline
+async function rpc(fn, args, ms = 5000) {
+  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), ms);
+  try { const { data, error } = await sb.rpc(fn, args).abortSignal(ctrl.signal); clearTimeout(t);
+    if (error) { if (/fetch|network|abort|Failed/i.test(error.message)) return null; throw error; } estado.online = true; actualizarLigacao(); return data; }
+  catch (e) { clearTimeout(t); if (e.name === "AbortError" || /fetch|network/i.test(String(e))) { estado.online = false; actualizarLigacao(); return null; } throw e; }
+}
+
+// ---------- 1. login ----------
+$("#btnLogin").onclick = async () => { $("#loginErro").classList.add("oculto");
+  const { error } = await sb.auth.signInWithPassword({ email: $("#email").value.trim(), password: $("#senha").value });
+  if (error) { $("#loginErro").textContent = "Não foi possível entrar: " + error.message; $("#loginErro").classList.remove("oculto"); return; } arranque(); };
+
+// ---------- 2. PIN ----------
+const teclado = $("#teclado"); for (const k of ["1","2","3","4","5","6","7","8","9","⌫","0","OK"]) { const b = document.createElement("button"); b.textContent = k; b.onclick = () => teclaPin(k); teclado.appendChild(b); }
+async function teclaPin(k) { const i = $("#pin"); if (k === "⌫") i.value = i.value.slice(0, -1); else if (k === "OK") await confirmarPin(); else if (i.value.length < 6) i.value += k; }
+async function confirmarPin() { $("#pinErro").classList.add("oculto"); const pin = $("#pin").value; if (pin.length < 4) return;
+  const s = await rpc("fn_staff_por_pin", { p_pin: pin });
+  if (s === null) { $("#pinErro").textContent = "Sem rede: não é possível verificar o PIN agora."; $("#pinErro").classList.remove("oculto"); return; }
+  if (!s) { $("#pinErro").textContent = "PIN incorrecto."; $("#pinErro").classList.remove("oculto"); $("#pin").value = ""; return; }
+  estado.staff = s; guardar(); $("#pin").value = ""; $("#staffNome").textContent = s.nome; estado.evento ? (ecra("ecraOp"), aba("entrada")) : prepararConfig(); }
+
+// ---------- 3. configuração ----------
+async function prepararConfig() { ecra("ecraConfig");
+  const { data } = await sb.from("eventos").select("id, nome, inicio_em").in("estado", ["a_venda", "esgotado"]).order("inicio_em");
+  $("#evento").innerHTML = (data || []).map((e) => `<option value="${e.id}" ${estado.evento?.id === e.id ? "selected" : ""}>${e.nome} · ${new Date(e.inicio_em).toLocaleDateString("pt-PT")}</option>`).join("");
+  $("#porta").value = estado.porta; $("#dispositivo").value = estado.dispositivo; }
+$("#btnConfig").onclick = async () => { const sel = $("#evento"); estado.evento = { id: sel.value, nome: sel.selectedOptions[0]?.textContent };
+  estado.porta = $("#porta").value || "Porta 1"; estado.dispositivo = $("#dispositivo").value || "POS-1"; guardar();
+  await descarregarManifesto(); $("#evNome").textContent = "· " + estado.evento.nome; ecra("ecraOp"); aba("entrada"); };
+
+async function descarregarManifesto() { const m = await rpc("fn_manifesto_porta", { p_evento: estado.evento.id }, 20000);
+  if (m) { m.porIndice = null; estado.manifesto = m; guardar(); } infoManifesto(); return !!m; }
+function infoManifesto() { const m = estado.manifesto; $("#infoManifesto").textContent = m ? `Lista local: ${m.bilhetes.length} bilhetes, ${m.pulseiras.length} pulseiras ligadas${m.inventario ? `, ${m.inventario.length} chips no inventário` : ""}, de ${new Date(m.gerado_em).toLocaleString("pt-PT")}` : "Sem lista local."; }
+$("#btnManifesto").onclick = descarregarManifesto; $("#btnSync").onclick = sincronizar;
+$("#btnTrocarPin").onclick = () => { estado.staff = null; guardar(); ecra("ecraPin"); };
+$("#btnReconfig").onclick = prepararConfig;
+$("#btnSair").onclick = async () => { if (estado.fila.length && !confirm(`Há ${estado.fila.length} registos por sincronizar. Sair mesmo assim?`)) return; await sb.auth.signOut(); localStorage.clear(); location.reload(); };
+
+// ---------- validação ----------
+let ultimaLeitura = "", ocupado = false;
+async function validar(codigo) {
+  if (ocupado) return; ocupado = true;
+  try {
+    const sid = estado.staff.id, ev = estado.evento.id, agora = new Date().toISOString();
+    let r = await rpc("fn_validar_bilhete", { p_evento: ev, p_codigo: codigo, p_porta: estado.porta, p_dispositivo: estado.dispositivo, p_staff: sid });
+    if (r === null) r = validarOffline(codigo, agora);
+    else if (r.resultado === "ok" && estado.manifesto) { const b = estado.manifesto.bilhetes.find((x) => x.id === r.bilhete_id); if (b) { b.estado = "utilizado"; b.utilizado_em = agora; b.utilizado_porta = estado.porta; guardar(); } }
+    apresentarValidacao(r);
+  } catch (e) { mostrarResultado("nao", "Erro", [{ t: e.message }]); } finally { ocupado = false; }
+}
+function tokenDe(codigo) { const m = /t=([0-9a-f]{32})/i.exec(codigo); return (m ? m[1] : codigo).trim(); }
+function validarOffline(codigo, agora) {
+  const m = estado.manifesto; if (!m) return { resultado: "sem_lista" };
+  const c = tokenDe(codigo); const cu = c.toUpperCase();
+  const b = m.bilhetes.find((x) => x.token === c.toLowerCase() || x.codigo === cu);
+  if (!b) return { resultado: "nao_encontrado" };
+  const t = m.tipos.find((x) => x.id === b.tipo_id) || {};
+  const info = { bilhete_id: b.id, codigo: b.codigo, portador: b.portador, tipo: t.nome, cor: t.cor, cor_hex: t.cor_hex, instrucao: t.instrucao, convite_tipo: b.convite_tipo, convidado_por: b.convidado_por, utilizado_em: b.utilizado_em, utilizado_porta: b.utilizado_porta };
+  let res = "ok";
+  if (b.estado === "utilizado") res = "ja_usado"; else if (!b.paga) res = "por_pagar";
+  if (res === "ok") { b.estado = "utilizado"; b.utilizado_em = agora; b.utilizado_porta = estado.porta + " (offline)"; }
+  estado.fila.push({ local_id: crypto.randomUUID(), op: "validar", codigo: c, resultado: res, porta: estado.porta, dispositivo: estado.dispositivo, staff_id: estado.staff.id, registado_em: agora });
+  guardar(); actualizarLigacao();
+  return { ...info, resultado: res, offline: true };
+}
+function apresentarValidacao(r) {
+  const nomeInst = r.instrucao ? `<div class="tipo">${r.instrucao}</div>` : "";
+  const off = r.offline ? `<div class="pequeno">registado sem rede</div>` : "";
+  switch (r.resultado) {
+    case "ok": {
+      estado.ultimoBilhete = r;
+      const esp = r.convite_tipo === "convite_especial", conv = r.convite_tipo === "convite";
+      const titulo = esp ? "★ CONVITE ESPECIAL" : conv ? "CONVITE" : "VÁLIDO";
+      mostrarResultado(esp ? "esp" : "ok", titulo, [{ t: r.portador || "", c: "nome" }, { t: `${r.tipo} · pulseira ${r.cor}`, c: "tipo" }, ...(conv || esp ? [{ t: `Convidado por ${r.convidado_por || "—"}` }] : [])],
+        r.cor_hex, nomeInst + off + `<div id="nfcPasso" class="pulsar" style="margin-top:12px">Agora aproxime a pulseira ${r.cor}…</div><p class="linha" style="width:100%;max-width:420px"><input id="uidLigar" placeholder="UID manual"><button class="btn" style="width:auto" id="btnLigarManual">Ligar</button></p>`);
+      $("#btnLigarManual").onclick = () => ligarPulseira($("#uidLigar").value);
+      estado.modoNfc = "ligar"; iniciarNfc(); break; }
+    case "ja_usado": mostrarResultado("nao", "JÁ UTILIZADO", [{ t: r.portador || "", c: "nome" }, { t: `Entrou às ${r.utilizado_em ? new Date(r.utilizado_em).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) : "?"} · ${r.utilizado_porta || ""}`, c: "tipo" }], r.cor_hex, off); break;
+    case "anulado": mostrarResultado("nao", "ANULADO", [{ t: r.portador || "", c: "nome" }, { t: "Bilhete reemitido, transferido ou cancelado", c: "tipo" }]); break;
+    case "por_pagar": mostrarResultado("nao", "POR PAGAR", [{ t: r.portador || "", c: "nome" }, { t: "A encomenda não está paga", c: "tipo" }]); break;
+    case "outro_evento": mostrarResultado("nao", "OUTRO EVENTO", [{ t: "Este bilhete não é deste evento", c: "tipo" }]); break;
+    case "sem_lista": mostrarResultado("aviso", "SEM REDE E SEM LISTA", [{ t: "Descarregue a lista de bilhetes quando houver rede", c: "tipo" }]); break;
+    default: mostrarResultado("nao", "NÃO ENCONTRADO", [{ t: "Código não existe", c: "tipo" }]);
+  }
+  carregarContadores();
+}
+$("#btnCodigo").onclick = () => { const v = $("#codigoManual").value.trim().toUpperCase(); if (v.length >= 8) { validar(v); $("#codigoManual").value = ""; } };
+$("#codigoManual").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#btnCodigo").click(); });
+
+// ---------- pulseiras ----------
+async function ligarPulseira(uid) {
+  const b = estado.ultimoBilhete; if (!b || !uid) return;
+  const agora = new Date().toISOString();
+  let r = await rpc("fn_ligar_pulseira", { p_evento: estado.evento.id, p_bilhete: b.bilhete_id, p_uid: uid, p_staff: estado.staff.id });
+  if (r === null) r = ligarOffline(b.bilhete_id, uid, agora);
+  else if (r.resultado === "ok" && estado.manifesto) { estado.manifesto.pulseiras.push({ uid: r.uid, bilhete_id: b.bilhete_id, estado: "ligada", dentro: true }); guardar(); }
+  const p = $("#nfcPasso"); if (!p) return;
+  if (r.resultado === "ok") { p.textContent = "Pulseira ligada ✔"; p.className = ""; som(true); setTimeout(fecharResultado, 900); }
+  else { p.textContent = { pulseira_ja_usada: "Esta pulseira já está noutro bilhete!", bilhete_ja_tem_pulseira: "Este bilhete já tem pulseira ligada", pulseira_desactivada: "Pulseira desactivada", pulseira_fora_inventario: "Pulseira NÃO reconhecida (fora do inventário)!", pulseira_danificada: "Pulseira marcada como danificada", pulseira_perdida: "Pulseira marcada como perdida", pulseira_ja_usada_outro_evento: "Pulseira já usada noutro evento!" }[r.resultado] || r.resultado; p.className = ""; som(false); }
+}
+function ligarOffline(bilheteId, uid, agora) {
+  const u = uid.replace(/[^0-9a-fA-F]/g, "").toUpperCase(); const m = estado.manifesto; if (!m) return { resultado: "sem_lista" };
+  if (m.inventario && !m.inventario.includes(u)) return { resultado: "pulseira_fora_inventario" };
+  if (m.pulseiras.find((p) => p.uid === u && p.estado === "ligada")) return { resultado: "pulseira_ja_usada" };
+  if (m.pulseiras.find((p) => p.bilhete_id === bilheteId && p.estado === "ligada")) return { resultado: "bilhete_ja_tem_pulseira" };
+  m.pulseiras.push({ uid: u, bilhete_id: bilheteId, estado: "ligada", dentro: true });
+  estado.fila.push({ local_id: crypto.randomUUID(), op: "ligar", bilhete_id: bilheteId, uid: u, staff_id: estado.staff.id, registado_em: agora }); guardar(); actualizarLigacao();
+  return { resultado: "ok" };
+}
+async function moverPulseira(uid) {
+  const agora = new Date().toISOString();
+  let r = await rpc("fn_mover_pulseira", { p_evento: estado.evento.id, p_uid: uid, p_porta: estado.porta, p_dispositivo: estado.dispositivo, p_staff: estado.staff.id });
+  if (r === null) r = moverOffline(uid, agora);
+  else if (r.resultado === "ok" && estado.manifesto) { const p = estado.manifesto.pulseiras.find((x) => x.uid === uid.replace(/[^0-9a-fA-F]/g, "").toUpperCase()); if (p) { p.dentro = r.dentro; guardar(); } }
+  if (r.resultado === "ok") mostrarResultado("ok", r.movimento === "saida" ? "SAÍDA" : "REENTRADA", [{ t: r.portador || "", c: "nome" }, { t: r.tipo || "", c: "tipo" }], r.cor_hex, r.offline ? "<div class='pequeno'>registado sem rede</div>" : "");
+  else mostrarResultado("nao", { pulseira_desconhecida: "PULSEIRA DESCONHECIDA", pulseira_desactivada: "PULSEIRA DESACTIVADA", reentrada_nao_permitida: "REENTRADA NÃO PERMITIDA", sem_lista: "SEM LISTA" }[r.resultado] || r.resultado, [{ t: r.portador || "", c: "nome" }]);
+  carregarContadores();
+}
+function moverOffline(uid, agora) {
+  const u = uid.replace(/[^0-9a-fA-F]/g, "").toUpperCase(); const m = estado.manifesto; if (!m) return { resultado: "sem_lista" };
+  const p = m.pulseiras.find((x) => x.uid === u); if (!p) return { resultado: "pulseira_desconhecida" }; if (p.estado !== "ligada") return { resultado: "pulseira_desactivada" };
+  if (!p.dentro && !m.evento.reentrada_permitida) return { resultado: "reentrada_nao_permitida" };
+  const mov = p.dentro ? "saida" : "reentrada"; p.dentro = !p.dentro;
+  const b = m.bilhetes.find((x) => x.id === p.bilhete_id) || {}; const t = m.tipos.find((x) => x.id === b.tipo_id) || {};
+  estado.fila.push({ local_id: crypto.randomUUID(), op: "mover", uid: u, porta: estado.porta, dispositivo: estado.dispositivo, staff_id: estado.staff.id, registado_em: agora }); guardar(); actualizarLigacao();
+  return { resultado: "ok", movimento: mov, portador: b.portador, tipo: t.nome, cor_hex: t.cor_hex, offline: true };
+}
+$("#btnUidManual").onclick = () => moverPulseira($("#uidManual").value);
+
+// Web NFC (Chrome Android). Em iPhone não existe: usar UID manual ou um leitor USB/BT que escreva como teclado.
+async function iniciarNfc() {
+  if (!("NDEFReader" in window)) { const e = $("#nfcEstadoSaida"); if (e) e.textContent = "NFC não disponível neste aparelho: use o UID manual."; return; }
+  if (estado.nfc) return;
+  try { const r = new NDEFReader(); await r.scan(); estado.nfc = r;
+    r.onreading = (ev) => { const uid = (ev.serialNumber || "").replace(/:/g, "").toUpperCase(); if (!uid) return;
+      if (!$("#res").classList.contains("oculto") && estado.modoNfc === "ligar" && estado.ultimoBilhete) ligarPulseira(uid);
+      else if (estado.aba === "saida") moverPulseira(uid); };
+    r.onreadingerror = () => {}; const e = $("#nfcEstadoSaida"); if (e) e.textContent = "NFC pronto. Aproxime a pulseira.";
+  } catch (e) { const el = $("#nfcEstadoSaida"); if (el) el.textContent = "NFC indisponível (" + e.message + "). Use o UID manual."; }
+}
+
+// ---------- câmara / QR ----------
+let stream, detector, aLer = false, raf;
+async function iniciarCamara() {
+  if (stream) return; const v = $("#video");
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 1280 } } }); v.srcObject = stream; await v.play(); }
+  catch (e) { v.insertAdjacentHTML("afterend", `<p class="erro">Sem acesso à câmara: ${e.message}. Use o código curto.</p>`); return; }
+  if ("BarcodeDetector" in window) detector = new BarcodeDetector({ formats: ["qr_code"] });
+  else { await import("https://esm.sh/jsqr@1.4.0").then((m) => (window.jsQR = m.default)); }
+  lerLoop();
+}
+function pararCamara() { cancelAnimationFrame(raf); if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; } }
+const canvas = document.createElement("canvas");
+async function lerLoop() {
+  const v = $("#video"); if (!stream) return;
+  if (!aLer && v.readyState >= 2 && $("#res").classList.contains("oculto")) { aLer = true;
+    try { let texto = null;
+      if (detector) { const codes = await detector.detect(v); texto = codes[0]?.rawValue ?? null; }
+      else if (window.jsQR) { canvas.width = v.videoWidth; canvas.height = v.videoHeight; const ctx = canvas.getContext("2d", { willReadFrequently: true }); ctx.drawImage(v, 0, 0); const d = ctx.getImageData(0, 0, canvas.width, canvas.height); texto = window.jsQR(d.data, d.width, d.height)?.data ?? null; }
+      if (texto && texto !== ultimaLeitura) { ultimaLeitura = texto; validar(texto); }
+    } catch {} aLer = false; }
+  raf = requestAnimationFrame(() => setTimeout(lerLoop, 120));
+}
+
+// ---------- procurar ----------
+$("#btnProcurar").onclick = async () => { const t = $("#procurarTexto").value.trim(); if (t.length < 2) return;
+  let lista = await rpc("fn_procurar_bilhetes_porta", { p_evento: estado.evento.id, p_texto: t });
+  if (lista === null) { const m = estado.manifesto; lista = m ? m.bilhetes.filter((b) => (b.portador || "").toLowerCase().includes(t.toLowerCase()) || b.codigo === t.toUpperCase()).map((b) => ({ ...b, tipo: (m.tipos.find((x) => x.id === b.tipo_id) || {}).nome })) : []; }
+  $("#resultadosProcura").innerHTML = lista.length ? lista.map((b) => `<div class="linha"><div style="flex:1"><b>${b.portador || ""}</b><br><span class="mudo">${b.tipo} · ${b.codigo} · ${b.estado}${b.telemovel ? " · " + b.telemovel : ""}</span></div>${b.estado === "emitido" ? `<button class="btn" data-cod="${b.codigo}">Validar</button>` : ""}</div>`).join("") : "<p class='mudo'>Nada encontrado.</p>";
+  $("#resultadosProcura").querySelectorAll("button").forEach((b) => b.onclick = () => { if (confirm("Confirmou a identidade do cliente?")) { validar(b.dataset.cod); } }); };
+
+// ---------- contadores e sincronização ----------
+async function carregarContadores() { let c = await rpc("fn_contadores_porta", { p_evento: estado.evento.id }, 4000);
+  if (c === null && estado.manifesto) { const m = estado.manifesto; c = { lotacao: m.evento.lotacao, emitidos: m.bilhetes.length, entrados: m.bilhetes.filter((b) => b.estado === "utilizado").length, dentro: m.pulseiras.filter((p) => p.estado === "ligada" && p.dentro).length, por_validar: m.bilhetes.filter((b) => b.estado === "emitido").length }; }
+  if (!c) return; $("#contadores").innerHTML = `<div><b class="num">${c.entrados}</b>entrados</div><div><b class="num">${c.dentro}</b>dentro</div><div><b class="num">${c.por_validar}</b>por validar</div><div><b class="num">${c.lotacao - c.dentro}</b>lugares livres</div><div><b class="num">${c.recusas ?? "–"}</b>recusas</div><div><b class="num">${c.duplicados ?? "–"}</b>duplicados</div>`; }
+async function sincronizar() { if (!estado.fila.length || !navigator.onLine) return;
+  const lote = estado.fila.slice(0, 100); const r = await rpc("fn_sincronizar_offline", { p_evento: estado.evento.id, p_itens: lote }, 30000);
+  if (!r) return; const feitos = new Set(r.map((x) => x.local_id)); estado.fila = estado.fila.filter((x) => !feitos.has(x.local_id)); guardar(); actualizarLigacao();
+  const dup = r.filter((x) => x.resultado === "duplicado").length; if (dup) alert(`${dup} entrada(s) feita(s) sem rede já tinham sido validadas noutro aparelho. Ver relatório de duplicados.`);
+  if (estado.fila.length) sincronizar(); else descarregarManifesto(); }
+setInterval(() => { if (estado.evento && $("#ecraOp").offsetParent) { carregarContadores(); sincronizar(); } }, 20000);
+
+// ---------- arranque ----------
+async function arranque() { actualizarLigacao(); const { data: { session } } = await sb.auth.getSession();
+  if (!session) { if (estado.staff && estado.evento && estado.manifesto) { /* sem rede: continua com a lista local */ } ecra("ecraLogin"); return; }
+  if (!estado.staff) { ecra("ecraPin"); return; } $("#staffNome").textContent = estado.staff.nome;
+  if (!estado.evento) { prepararConfig(); return; } $("#evNome").textContent = "· " + estado.evento.nome; infoManifesto(); ecra("ecraOp"); aba("entrada"); carregarContadores(); sincronizar(); }
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+arranque();
+</script>
+</body>
+</html>
