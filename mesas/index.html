@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#1f3b4d">
+<title>Mesas do evento</title>
+<link rel="stylesheet" href="estilos.css">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icone.png">
+</head>
+<body>
+<div id="app">
+  <div id="carregar" class="centro"><div class="caixa"><p>A carregar...</p></div></div>
+</div>
+
+<!-- Modelo: entrada -->
+<template id="t-entrada">
+  <div class="centro">
+    <form class="caixa form-entrada" id="form-entrada">
+      <h1>Mesas do evento</h1>
+      <p class="suave">Requinte Wine Restaurante, Clube Náutico da Beira</p>
+      <label>Email <input type="email" name="email" required autocomplete="username"></label>
+      <label>Palavra-passe <input type="password" name="senha" required autocomplete="current-password"></label>
+      <button class="btn primario largo" type="submit">Entrar</button>
+      <button class="btn largo" type="button" id="btn-criar-conta">Criar conta (primeira vez)</button>
+      <p class="erro" id="erro-entrada"></p>
+    </form>
+  </div>
+</template>
+
+<!-- Modelo: aplicação -->
+<template id="t-app">
+  <header class="topo">
+    <div class="topo-esq">
+      <strong id="evento-nome">Evento</strong>
+      <span class="suave" id="eu-nome"></span>
+    </div>
+    <div class="contadores" id="contadores"></div>
+    <div class="topo-dir">
+      <input type="search" id="pesquisa" placeholder="Nome, telefone, bilhete ou mesa" autocomplete="off">
+      <button class="btn pequeno" id="btn-sair" title="Sair">Sair</button>
+    </div>
+  </header>
+  <nav class="nav" id="nav">
+    <a href="#planta" data-vista="planta">Planta</a>
+    <a href="#grupos" data-vista="grupos">Grupos</a>
+    <a href="#listas" data-vista="listas">Listas</a>
+    <a href="#historico" data-vista="historico">Histórico</a>
+    <a href="#editor" data-vista="editor" class="so-gestao">Editor</a>
+    <a href="#definicoes" data-vista="definicoes" class="so-gestao">Definições</a>
+  </nav>
+  <main id="vista"></main>
+  <div id="aviso" class="aviso escondido"></div>
+  <div id="modal" class="modal escondido"><div class="modal-caixa" id="modal-caixa"></div></div>
+</template>
+
+<script src="lib/supabase.js"></script>
+<script src="config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

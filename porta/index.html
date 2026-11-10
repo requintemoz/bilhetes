@@ -21,6 +21,7 @@
   .resultado.r-ok{background:#15803d}.resultado.r-nao{background:#b91c1c}.resultado.r-aviso{background:#a16207}.resultado.r-esp{background:#92400e}
   .resultado h1{font-size:2.6rem;margin:0}.resultado .nome{font-size:1.8rem;font-weight:800}.resultado .tipo{font-size:1.4rem}
   .resultado .cor{width:120px;height:28px;border-radius:14px;border:3px solid #fff;margin:6px 0}
+  .resultado .mesa{font-size:2.4rem;background:rgba(255,255,255,.18);border-radius:12px;padding:4px 18px;letter-spacing:1px}
   .resultado .btn{width:100%;max-width:420px;background:#fff;color:#111827}
   .estado{display:inline-block;padding:4px 10px;border-radius:999px;font-size:.8rem;font-weight:700}
   .on{background:#14532d;color:#bbf7d0}.off{background:#7f1d1d;color:#fecaca}
@@ -215,7 +216,7 @@ function validarOffline(codigo, agora) {
   const b = m.bilhetes.find((x) => x.token === c.toLowerCase() || x.codigo === cu);
   if (!b) return { resultado: "nao_encontrado" };
   const t = m.tipos.find((x) => x.id === b.tipo_id) || {};
-  const info = { bilhete_id: b.id, codigo: b.codigo, portador: b.portador, tipo: t.nome, cor: t.cor, cor_hex: t.cor_hex, instrucao: t.instrucao, convite_tipo: b.convite_tipo, convidado_por: b.convidado_por, utilizado_em: b.utilizado_em, utilizado_porta: b.utilizado_porta };
+  const info = { bilhete_id: b.id, codigo: b.codigo, portador: b.portador, tipo: t.nome, cor: t.cor, cor_hex: t.cor_hex, instrucao: t.instrucao, convite_tipo: b.convite_tipo, convidado_por: b.convidado_por, utilizado_em: b.utilizado_em, utilizado_porta: b.utilizado_porta, mesa: b.mesa || null };
   let res = "ok";
   if (b.estado === "utilizado") res = "ja_usado"; else if (!b.paga) res = "por_pagar";
   if (res === "ok") { b.estado = "utilizado"; b.utilizado_em = agora; b.utilizado_porta = estado.porta + " (offline)"; }
@@ -231,11 +232,11 @@ function apresentarValidacao(r) {
       estado.ultimoBilhete = r;
       const esp = r.convite_tipo === "convite_especial", conv = r.convite_tipo === "convite";
       const titulo = esp ? "★ CONVITE ESPECIAL" : conv ? "CONVITE" : "VÁLIDO";
-      mostrarResultado(esp ? "esp" : "ok", titulo, [{ t: r.portador || "", c: "nome" }, { t: `${r.tipo} · pulseira ${r.cor}`, c: "tipo" }, ...(conv || esp ? [{ t: `Convidado por ${r.convidado_por || "—"}` }] : [])],
+      mostrarResultado(esp ? "esp" : "ok", titulo, [{ t: r.portador || "", c: "nome" }, ...(r.mesa ? [{ t: `MESA ${r.mesa}`, c: "nome mesa" }] : []), { t: `${r.tipo} · pulseira ${r.cor}`, c: "tipo" }, ...(conv || esp ? [{ t: `Convidado por ${r.convidado_por || "—"}` }] : [])],
         r.cor_hex, nomeInst + off + `<div id="nfcPasso" class="pulsar" style="margin-top:12px">Agora aproxime a pulseira ${r.cor}…</div><p class="linha" style="width:100%;max-width:420px"><input id="uidLigar" placeholder="UID manual"><button class="btn" style="width:auto" id="btnLigarManual">Ligar</button></p>`);
       $("#btnLigarManual").onclick = () => ligarPulseira($("#uidLigar").value);
       estado.modoNfc = "ligar"; iniciarNfc(); break; }
-    case "ja_usado": mostrarResultado("nao", "JÁ UTILIZADO", [{ t: r.portador || "", c: "nome" }, { t: `Entrou às ${r.utilizado_em ? new Date(r.utilizado_em).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) : "?"} · ${r.utilizado_porta || ""}`, c: "tipo" }], r.cor_hex, off); break;
+    case "ja_usado": mostrarResultado("nao", "JÁ UTILIZADO", [{ t: r.portador || "", c: "nome" }, ...(r.mesa ? [{ t: `Mesa ${r.mesa}`, c: "tipo" }] : []), { t: `Entrou às ${r.utilizado_em ? new Date(r.utilizado_em).toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }) : "?"} · ${r.utilizado_porta || ""}`, c: "tipo" }], r.cor_hex, off); break;
     case "anulado": mostrarResultado("nao", "ANULADO", [{ t: r.portador || "", c: "nome" }, { t: "Bilhete reemitido, transferido ou cancelado", c: "tipo" }]); break;
     case "por_pagar": mostrarResultado("nao", "POR PAGAR", [{ t: r.portador || "", c: "nome" }, { t: "A encomenda não está paga", c: "tipo" }]); break;
     case "outro_evento": mostrarResultado("nao", "OUTRO EVENTO", [{ t: "Este bilhete não é deste evento", c: "tipo" }]); break;
@@ -326,7 +327,7 @@ async function lerLoop() {
 $("#btnProcurar").onclick = async () => { const t = $("#procurarTexto").value.trim(); if (t.length < 2) return;
   let lista = await rpc("fn_procurar_bilhetes_porta", { p_evento: estado.evento.id, p_texto: t });
   if (lista === null) { const m = estado.manifesto; lista = m ? m.bilhetes.filter((b) => (b.portador || "").toLowerCase().includes(t.toLowerCase()) || b.codigo === t.toUpperCase()).map((b) => ({ ...b, tipo: (m.tipos.find((x) => x.id === b.tipo_id) || {}).nome })) : []; }
-  $("#resultadosProcura").innerHTML = lista.length ? lista.map((b) => `<div class="linha"><div style="flex:1"><b>${b.portador || ""}</b><br><span class="mudo">${b.tipo} · ${b.codigo} · ${b.estado}${b.telemovel ? " · " + b.telemovel : ""}</span></div>${b.estado === "emitido" ? `<button class="btn" data-cod="${b.codigo}">Validar</button>` : ""}</div>`).join("") : "<p class='mudo'>Nada encontrado.</p>";
+  $("#resultadosProcura").innerHTML = lista.length ? lista.map((b) => `<div class="linha"><div style="flex:1"><b>${b.portador || ""}</b><br><span class="mudo">${b.tipo} · ${b.codigo} · ${b.estado}${b.mesa ? " · mesa " + b.mesa : ""}${b.telemovel ? " · " + b.telemovel : ""}</span></div>${b.estado === "emitido" ? `<button class="btn" data-cod="${b.codigo}">Validar</button>` : ""}</div>`).join("") : "<p class='mudo'>Nada encontrado.</p>";
   $("#resultadosProcura").querySelectorAll("button").forEach((b) => b.onclick = () => { if (confirm("Confirmou a identidade do cliente?")) { validar(b.dataset.cod); } }); };
 
 // ---------- contadores e sincronização ----------
