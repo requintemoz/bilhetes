@@ -2,9 +2,12 @@
 <html lang="pt">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Confirmar termos</title>
+<title>A sua reserva</title>
 <link rel="stylesheet" href="../comum.css">
-<style>.termos{max-height:260px;overflow:auto;background:#fafafa;border:1px solid var(--borda);border-radius:10px;padding:4px 14px;font-size:.92rem}.termos ol{padding-left:20px}</style>
+<style>.termos{max-height:260px;overflow:auto;background:#fafafa;border:1px solid var(--borda);border-radius:10px;padding:4px 14px;font-size:.92rem}.termos ol{padding-left:20px}
+.dl{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--borda)}.dl b{flex:1;text-align:right;word-break:break-all}
+.mini{padding:4px 10px;min-height:0;font-size:.85rem;width:auto}.dados{background:#fafafa;border:1px solid var(--borda);border-radius:12px;padding:4px 14px;margin:10px 0}
+.comp{padding:6px 0;border-bottom:1px solid var(--borda)}</style>
 </head>
 <body>
 <div class="contentor">
@@ -13,7 +16,7 @@
     <div class="cartao">
       <div class="mudo pequeno" id="org"></div>
       <h1>Olá, <span id="cliente"></span></h1>
-      <p>Para emitirmos o seu bilhete para <b id="evento"></b> (<span id="quando"></span>), precisamos que confirme os termos.</p>
+      <p id="intro">Para emitirmos o seu bilhete para <b id="evento"></b> (<span id="quando"></span>), precisamos que confirme os termos.</p>
       <div id="itens" class="mudo"></div>
       <p><b>Total: <span id="total"></span></b> · <span id="estadoPag"></span></p>
     </div>
@@ -27,6 +30,7 @@
       <p class="mudo pequeno">Pode retirar os consentimentos a qualquer momento (responda SAIR no WhatsApp ou contacte-nos). As mensagens sobre o seu bilhete são enviadas em qualquer caso.</p>
       <p><button class="btn grande" id="btnConfirmar" disabled>Confirmar</button></p>
     </div>
+    <div class="cartao oculto" id="pagar"></div>
     <div class="cartao oculto" id="feito"></div>
   </div>
 </div>
@@ -44,7 +48,9 @@ else {
   $("#estadoPag").textContent = { reservada: "pagamento por confirmar", paga: "pagamento confirmado", cancelada: "reserva cancelada", reembolsada: "reembolsada" }[en.estado] || en.estado;
   $("#termosTitulo").textContent = en.termos?.titulo || "Termos e Condições"; $("#termosTexto").innerHTML = md(en.termos?.texto_md);
   $("#privTitulo").textContent = en.privacidade?.titulo || "Política de Privacidade"; $("#privTexto").innerHTML = md(en.privacidade?.texto_md);
+  if (en.termos_aceites) $("#intro").innerHTML = `Reserva para <b>${esc(en.evento)}</b> (${esc(data(en.inicio_em))}).`;
   $("#conteudo").classList.remove("oculto");
+  desenharPagamento(en);
   if (en.estado === "cancelada" || en.estado === "reembolsada") { $("#formulario").classList.add("oculto"); }
   else if (en.termos_aceites) mostrarFeito(en);
   $("#cTermos").onchange = () => $("#btnConfirmar").disabled = !$("#cTermos").checked;
@@ -54,6 +60,51 @@ else {
     if (e2) { mostrarErro($("#erro"), e2); $("#btnConfirmar").disabled = false; return; }
     const { data: en2 } = await sb.rpc("fn_encomenda_publica", { p_token: o }); mostrarFeito(en2 || en, r);
   };
+}
+// ---------- pagamento com comprovativo
+function htmlDados(p, ref, total) {
+  const linha = (rot, val, copiar) => val ? `<div class="dl"><span class="mudo">${rot}</span><b>${esc(val)}</b>${copiar ? `<button class="btn sec mini" data-copiar="${esc(val)}">Copiar</button>` : ""}</div>` : "";
+  return `<div class="dados">` + (p.meio === "transferencia"
+    ? `<p><b>Transferência bancária</b></p>${linha("Banco", p.banco)}${linha("Em nome de", p.titular)}${linha("Conta", p.conta, true)}${linha("NIB", p.nib, true)}${linha("Valor", mt(total))}${linha("Descritivo", ref, true)}`
+    : `<p><b>${esc(p.nome)}</b></p>${linha("Número", p.numero, true)}${linha("Em nome de", p.titular)}${linha("Valor", mt(total))}${linha("Referência", ref, true)}`) + `</div>`;
+}
+async function reduzir(f) {
+  if (!/^image\/(jpeg|png|webp)$/.test(f.type) || f.size < 1.5e6 || !window.createImageBitmap) return f;
+  try { const img = await createImageBitmap(f); const k = Math.min(1, 2000 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    const b = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.85)); return b && b.size < f.size ? new File([b], f.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : f; } catch { return f; } }
+async function enviarComprovativo(token, f) {
+  if (!f) throw new Error("Escolha o ficheiro do comprovativo.");
+  f = await reduzir(f);
+  const tipo = f.type || (/\.pdf$/i.test(f.name) ? "application/pdf" : /\.png$/i.test(f.name) ? "image/png" : "image/jpeg");
+  if (!["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"].includes(tipo)) throw new Error("Envie uma fotografia (JPG ou PNG) ou um PDF.");
+  if (f.size > 5 * 1024 * 1024) throw new Error("O ficheiro tem mais de 5 MB. Envie uma fotografia ou um PDF mais pequeno.");
+  const ext = { "application/pdf": "pdf", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "image/heif": "heif" }[tipo] || "jpg";
+  const caminho = `${token}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error: e1 } = await sb.storage.from("comprovativos").upload(caminho, f, { contentType: tipo, upsert: false });
+  if (e1) throw new Error(/row-level|security|403|unauthor/i.test(e1.message || "") ? "Esta reserva já não aceita comprovativos (expirou, foi paga ou já tem 5 ficheiros)." : "Não foi possível enviar o ficheiro. Verifique a ligação à internet e tente de novo.");
+  const { error: e2 } = await sb.rpc("fn_registar_comprovativo", { p_token: token, p_caminho: caminho, p_nome: (f.name || "comprovativo").slice(0, 120), p_tipo: tipo, p_tamanho: f.size });
+  if (e2) throw e2;
+}
+function desenharPagamento(en) {
+  const ESTADO_COMP = { pendente: "a verificar", aceite: "aceite", recusado: "não aceite" };
+  const caixa = $("#pagar"); const comps = en.comprovativos || [];
+  if (en.estado !== "reservada" || (!en.pagamento && !comps.length)) { caixa.classList.add("oculto"); return; }
+  const prazo = en.prazo_confirmacao || "48 horas"; const pendente = comps.some((k) => k.estado === "pendente");
+  const ultimo = comps[comps.length - 1];
+  caixa.innerHTML = `<h2>Pagamento</h2>
+    ${pendente ? `<div class="ok">Recebemos o seu comprovativo. Vamos confirmar a entrada do valor na nossa conta e enviamos o bilhete por WhatsApp. Este processo pode demorar até ${esc(prazo)}.</div>` : ""}
+    ${!pendente && ultimo?.estado === "recusado" ? `<div class="erro">O último comprovativo não foi aceite${ultimo.motivo ? ": " + esc(ultimo.motivo) : ""}. Pode enviar outro.</div>` : ""}
+    ${!pendente && en.pagamento ? htmlDados(en.pagamento, en.referencia, en.total) + `<p class="mudo pequeno">Escreva a referência <b>${esc(en.referencia)}</b> no descritivo.${en.expira_em ? ` Pague e envie o comprovativo até <b>${esc(data(en.expira_em))}</b>; depois disso a reserva é cancelada.` : ""}</p>` : ""}
+    ${comps.length ? `<h3>Comprovativos enviados</h3>${comps.map((k) => `<div class="comp pequeno">${esc(k.nome || "comprovativo")} <span class="mudo">enviado a ${esc(data(k.enviado_em))}: ${ESTADO_COMP[k.estado] || k.estado}</span></div>`).join("")}` : ""}
+    ${en.pode_enviar_comprovativo ? `<h3>${comps.length ? "Enviar outro ficheiro" : "Enviar o comprovativo"}</h3><p class="mudo pequeno">Fotografia ou PDF do comprovativo, até 5 MB.</p>
+      <input type="file" id="fComp" accept="image/*,application/pdf"><p><button class="btn grande" id="btnComp">Enviar comprovativo</button></p><p id="compMsg" class="oculto"></p>` : ""}
+    ${!pendente ? `<p class="aviso">O bilhete será enviado por WhatsApp depois de confirmarmos a entrada do valor. Este processo pode demorar até ${esc(prazo)}.</p>` : ""}`;
+  caixa.classList.remove("oculto");
+  caixa.querySelectorAll("[data-copiar]").forEach((b) => b.onclick = () => { navigator.clipboard?.writeText(b.dataset.copiar); b.textContent = "Copiado"; setTimeout(() => b.textContent = "Copiar", 1500); });
+  $("#btnComp") && ($("#btnComp").onclick = async () => { const msg = $("#compMsg"); msg.className = "oculto"; $("#btnComp").disabled = true; $("#btnComp").textContent = "A enviar…";
+    try { await enviarComprovativo(o, $("#fComp").files[0]); const { data: en2 } = await sb.rpc("fn_encomenda_publica", { p_token: o }); desenharPagamento(en2 || en); }
+    catch (e) { mostrarErro(msg, e); $("#btnComp").disabled = false; $("#btnComp").textContent = "Enviar comprovativo"; } });
 }
 function mostrarFeito(en, r) {
   $("#formulario").classList.add("oculto"); const f = $("#feito"); f.classList.remove("oculto");

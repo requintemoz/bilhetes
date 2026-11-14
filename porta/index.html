@@ -41,6 +41,8 @@
   <!-- 1. Sessão do aparelho -->
   <section id="ecraLogin" class="cartao">
     <h2>Iniciar sessão do aparelho</h2>
+    <p><a class="btn grande sec" href="/menu-cnb/entrar.html">Entrar com nome e PIN</a></p>
+    <p class="mudo pequeno">Ou com a conta de porta do aparelho:</p>
     <label>Email da conta de porta</label><input id="email" type="email" autocomplete="username">
     <label>Palavra-passe</label><input id="senha" type="password" autocomplete="current-password">
     <p><button class="btn grande" id="btnLogin">Entrar</button></p>
@@ -195,7 +197,8 @@ function infoManifesto() { const m = estado.manifesto; $("#infoManifesto").textC
 $("#btnManifesto").onclick = descarregarManifesto; $("#btnSync").onclick = sincronizar;
 $("#btnTrocarPin").onclick = () => { estado.staff = null; guardar(); ecra("ecraPin"); };
 $("#btnReconfig").onclick = prepararConfig;
-$("#btnSair").onclick = async () => { if (estado.fila.length && !confirm(`Há ${estado.fila.length} registos por sincronizar. Sair mesmo assim?`)) return; await sb.auth.signOut(); localStorage.clear(); location.reload(); };
+// apaga só os dados da porta (a lista do evento e a fila); a sessão é partilhada com o menu digital no mesmo aparelho
+$("#btnSair").onclick = async () => { if (estado.fila.length && !confirm(`Há ${estado.fila.length} registos por sincronizar. Sair mesmo assim?`)) return; await sb.auth.signOut(); Object.keys(localStorage).filter((k) => k.startsWith("porta.")).forEach((k) => localStorage.removeItem(k)); location.reload(); };
 
 // ---------- validação ----------
 let ultimaLeitura = "", ocupado = false;
@@ -204,19 +207,23 @@ async function validar(codigo) {
   try {
     const sid = estado.staff.id, ev = estado.evento.id, agora = new Date().toISOString();
     let r = await rpc("fn_validar_bilhete", { p_evento: ev, p_codigo: codigo, p_porta: estado.porta, p_dispositivo: estado.dispositivo, p_staff: sid });
-    if (r === null) r = validarOffline(codigo, agora);
+    if (r === null) r = await validarOffline(codigo, agora);
     else if (r.resultado === "ok" && estado.manifesto) { const b = estado.manifesto.bilhetes.find((x) => x.id === r.bilhete_id); if (b) { b.estado = "utilizado"; b.utilizado_em = agora; b.utilizado_porta = estado.porta; guardar(); } }
     apresentarValidacao(r);
   } catch (e) { mostrarResultado("nao", "Erro", [{ t: e.message }]); } finally { ocupado = false; }
 }
 function tokenDe(codigo) { const m = /t=([0-9a-f]{32})/i.exec(codigo); return (m ? m[1] : codigo).trim(); }
-function validarOffline(codigo, agora) {
+// a lista local só tem resumos sha256 dos códigos (um aparelho perdido não revela bilhetes)
+async function sha256(t) { const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)); return [...new Uint8Array(d)].map((x) => x.toString(16).padStart(2, "0")).join(""); }
+async function validarOffline(codigo, agora) {
   const m = estado.manifesto; if (!m) return { resultado: "sem_lista" };
-  const c = tokenDe(codigo); const cu = c.toUpperCase();
-  const b = m.bilhetes.find((x) => x.token === c.toLowerCase() || x.codigo === cu);
+  if (m.versao !== 2) return { resultado: "sem_lista" }; // lista antiga: descarregar de novo
+  const c = tokenDe(codigo); const porId = /^id:/i.test(c) ? c.slice(3).toLowerCase() : null;
+  const h = porId ? null : await sha256(c.toLowerCase()), hc = porId ? null : await sha256(c.toUpperCase());
+  const b = m.bilhetes.find((x) => porId ? x.id === porId : (x.h === h || x.hc === hc));
   if (!b) return { resultado: "nao_encontrado" };
   const t = m.tipos.find((x) => x.id === b.tipo_id) || {};
-  const info = { bilhete_id: b.id, codigo: b.codigo, portador: b.portador, tipo: t.nome, cor: t.cor, cor_hex: t.cor_hex, instrucao: t.instrucao, convite_tipo: b.convite_tipo, convidado_por: b.convidado_por, utilizado_em: b.utilizado_em, utilizado_porta: b.utilizado_porta, mesa: b.mesa || null };
+  const info = { bilhete_id: b.id, codigo: porId || c.length > 10 ? "" : c.toUpperCase(), portador: b.portador, tipo: t.nome, cor: t.cor, cor_hex: t.cor_hex, instrucao: t.instrucao, convite_tipo: b.convite_tipo, convidado_por: b.convidado_por, utilizado_em: b.utilizado_em, utilizado_porta: b.utilizado_porta, mesa: b.mesa || null };
   let res = "ok";
   if (b.estado === "utilizado") res = "ja_usado"; else if (!b.paga) res = "por_pagar";
   if (res === "ok") { b.estado = "utilizado"; b.utilizado_em = agora; b.utilizado_porta = estado.porta + " (offline)"; }
@@ -326,8 +333,8 @@ async function lerLoop() {
 // ---------- procurar ----------
 $("#btnProcurar").onclick = async () => { const t = $("#procurarTexto").value.trim(); if (t.length < 2) return;
   let lista = await rpc("fn_procurar_bilhetes_porta", { p_evento: estado.evento.id, p_texto: t });
-  if (lista === null) { const m = estado.manifesto; lista = m ? m.bilhetes.filter((b) => (b.portador || "").toLowerCase().includes(t.toLowerCase()) || b.codigo === t.toUpperCase()).map((b) => ({ ...b, tipo: (m.tipos.find((x) => x.id === b.tipo_id) || {}).nome })) : []; }
-  $("#resultadosProcura").innerHTML = lista.length ? lista.map((b) => `<div class="linha"><div style="flex:1"><b>${b.portador || ""}</b><br><span class="mudo">${b.tipo} · ${b.codigo} · ${b.estado}${b.mesa ? " · mesa " + b.mesa : ""}${b.telemovel ? " · " + b.telemovel : ""}</span></div>${b.estado === "emitido" ? `<button class="btn" data-cod="${b.codigo}">Validar</button>` : ""}</div>`).join("") : "<p class='mudo'>Nada encontrado.</p>";
+  if (lista === null) { const m = estado.manifesto; lista = m && m.versao === 2 ? m.bilhetes.filter((b) => (b.portador || "").toLowerCase().includes(t.toLowerCase())).map((b) => ({ ...b, codigo: "", tipo: (m.tipos.find((x) => x.id === b.tipo_id) || {}).nome })) : []; }
+  $("#resultadosProcura").innerHTML = lista.length ? lista.map((b) => `<div class="linha"><div style="flex:1"><b>${b.portador || ""}</b><br><span class="mudo">${b.tipo}${b.codigo ? " · " + b.codigo : ""} · ${b.estado}${b.mesa ? " · mesa " + b.mesa : ""}${b.telemovel ? " · " + b.telemovel : ""}</span></div>${b.estado === "emitido" ? `<button class="btn" data-cod="${b.codigo || "ID:" + b.id}">Validar</button>` : ""}</div>`).join("") : "<p class='mudo'>Nada encontrado.</p>";
   $("#resultadosProcura").querySelectorAll("button").forEach((b) => b.onclick = () => { if (confirm("Confirmou a identidade do cliente?")) { validar(b.dataset.cod); } }); };
 
 // ---------- contadores e sincronização ----------

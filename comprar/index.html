@@ -12,6 +12,12 @@
   .termos{max-height:200px;overflow:auto;background:#fafafa;border:1px solid var(--borda);border-radius:10px;padding:4px 14px;font-size:.9rem}
   .pag{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pag label{border:2px solid var(--borda);border-radius:12px;padding:12px;cursor:pointer;display:flex;gap:8px;align-items:center;margin:0}.pag input{width:auto;min-height:0}.pag label:has(input:checked){border-color:var(--azul);background:#eef2ff}
   .faq details{border-bottom:1px solid var(--borda);padding:8px 0}
+  .idade{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0 8px 12px;border-left:3px solid var(--borda)}
+  .idade label{margin:0;font-weight:500}.idade select{width:auto;min-width:160px}
+  .linhas{margin-top:10px;background:#fafafa;border:1px solid var(--borda);border-radius:12px;padding:4px 14px}.linhas:empty{display:none}
+  .dl{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--borda)}.dl b{flex:1;text-align:right;word-break:break-all}
+  .mini{padding:4px 10px;min-height:0;font-size:.85rem;width:auto}.dados{background:#fafafa;border:1px solid var(--borda);border-radius:12px;padding:4px 14px;margin:10px 0}
+  .ln{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--borda)}.ln:last-of-type{border:0}
 </style>
 </head>
 <body>
@@ -40,11 +46,10 @@
 
     <div class="cartao" id="passo3">
       <h2>3. Pagamento</h2>
-      <div class="pag">
+      <div class="pag" id="meios">
         <label><input type="radio" name="meio" value="mpesa" checked> M-Pesa</label>
-        <label><input type="radio" name="meio" value="emola"> e-Mola</label>
       </div>
-      <p class="mudo pequeno">Receberá o pedido de pagamento no telemóvel; escreva o PIN só na aplicação da operadora.</p>
+      <p class="mudo pequeno" id="pagNota">Receberá o pedido de pagamento no telemóvel; escreva o PIN só na aplicação da operadora.</p>
     </div>
 
     <div class="cartao" id="passo4">
@@ -69,44 +74,210 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { C, $, $$, esc, data, mt, md, param, mostrarErro, telemovelValido } from "../comum.js";
 const sb = createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
 const slug = param("e") || "";
-let ev, qtds = {};
+let ev, qtds = {}, cotT = null, cotN = 0;
+// modo "como nos hotéis": quando os tipos têm idades, pede adultos, crianças e a idade de cada criança
+const MAX_ONLINE = 10;
+let modoIdades = false, adultos = 1, idades = [], semTipo = [];
+const temIdade = (p) => p.idade_min != null || p.idade_max != null;
+const tipoIdade = (a) => ev.precos.find((p) => p.venda_aberta && temIdade(p) && (p.idade_min ?? 0) <= a && a <= (p.idade_max ?? 999));
+const idadeAdulto = () => { const ab = ev.precos.filter((p) => p.venda_aberta && temIdade(p) && p.idade_max == null); return ab.length ? Math.min(...ab.map((p) => p.idade_min ?? 0)) : 18; };
+const faixa = (p) => p.idade_max == null ? `${p.idade_min ?? 0} anos ou mais` : (p.idade_min ?? 0) === 0 ? `até ${p.idade_max} anos` : `${p.idade_min} a ${p.idade_max} anos`;
+const precoOuGratis = (v) => Number(v) === 0 ? "grátis" : mt(v);
+const nomeIdade = (a) => a === 0 ? "menos de 1 ano" : a === 1 ? "1 ano" : `${a} anos`;
+const listaE = (xs) => xs.length > 1 ? xs.slice(0, -1).join(", ") + " e " + xs[xs.length - 1] : xs.join("");
+const precoEscalao = (base, esc, n) => { let pr = Number(base); for (const e of (esc || []).slice().sort((a, b) => a.min - b.min)) if (n >= e.min) pr = Number(e.preco); return pr; };
+const pessoas = () => Object.values(qtds).reduce((s, q) => s + (q || 0), 0) + semTipo.length + idades.filter((a) => a == null).length;
+const textoEscaloes = (escaloes, base) => { const e = (escaloes || []).slice().sort((a, b) => a.min - b.min); if (!e.length) return "";
+  return "Em grupo: " + [`até ${e[0].min - 1}, ${mt(base)}`, ...e.map((x, i) => `${x.min}${e[i + 1] ? " a " + (e[i + 1].min - 1) : " ou mais"}, ${mt(x.preco)}`)].join("; ") + " por pessoa"; };
 async function carregar() {
   const { data: e, error } = await sb.rpc("fn_evento_publico", { p_slug: slug });
   if (error || !e) { mostrarErro($("#erro"), "Evento não encontrado ou sem venda aberta."); return; }
   ev = e; document.title = `Bilhetes · ${e.nome}`;
-  $("#nome").textContent = e.nome; $("#quando").textContent = data(e.inicio_em); $("#local").textContent = e.local; $("#org").textContent = `Organização: ${e.organizacao?.nome || ""} · Entrada só para maiores de ${e.idade_minima}`;
+  $("#nome").textContent = e.nome; $("#quando").textContent = data(e.inicio_em); $("#local").textContent = e.local; $("#org").textContent = `Organização: ${e.organizacao?.nome || ""} ${e.idade_minima > 0 ? ` · Entrada só para maiores de ${e.idade_minima}` : ""}`;
   $("#descricao").textContent = e.descricao || ""; if (e.imagem_url) { $("#capa").src = e.imagem_url; $("#capa").classList.remove("oculto"); }
   $("#termosTitulo").textContent = e.termos?.titulo || "Termos e Condições"; $("#termosTexto").innerHTML = md(e.termos?.texto_md);
   $("#privTitulo").textContent = e.privacidade?.titulo || "Política de Privacidade"; $("#privTexto").innerHTML = md(e.privacidade?.texto_md);
   if (e.faq?.length) { $("#faq").classList.remove("oculto"); $("#faqLista").innerHTML = e.faq.map((f) => `<details><summary>${esc(f.pergunta)}</summary><p>${esc(f.resposta)}</p></details>`).join(""); }
-  desenharTipos(); $("#ev").classList.remove("oculto");
+  desenharTipos(); desenharMeios(); $("#ev").classList.remove("oculto");
   if (e.estado === "esgotado" || e.disponivel <= 0) { $("#tipos").innerHTML = "<p class='aviso'>Esgotado.</p>"; $("#btnComprar").disabled = true; }
 }
+// ---------- pagamento com comprovativo (transferência bancária; M-Pesa sem ligação à operadora)
+function desenharMeios() {
+  const pm = ev.pagamento; if (!pm) return; // base de dados ainda sem a actualização: mantém o pagamento antigo
+  const ms = pm.metodos || [];
+  if (!ms.length) {
+    $("#meios").innerHTML = ""; $("#pagNota").className = "aviso";
+    $("#pagNota").textContent = `De momento não é possível pagar online${pm.transferencia_fechada ? ` (a transferência bancária fecha ${pm.fecho_transferencia_horas} horas antes do evento)` : ""}. Para reservar, contacte-nos${ev.organizacao?.telefone ? " pelo " + ev.organizacao.telefone : ""}.`;
+    $("#btnComprar").disabled = true; return;
+  }
+  const haJa = ms.some((m) => m.modo === "imediato");
+  const rotulo = (m) => m.modo === "imediato" ? "M-Pesa: pagar já" : m.meio === "mpesa" && haJa ? "M-Pesa: pagar e enviar comprovativo" : m.nome;
+  $("#meios").innerHTML = ms.map((m, i) => `<label><input type="radio" name="meio" value="${esc(m.id || m.meio)}" ${i === 0 ? "checked" : ""}> ${esc(rotulo(m))}</label>`).join("");
+  const nota = () => { const m = metodoEscolhido();
+    $("#pagNota").textContent = m?.modo === "imediato"
+      ? "Ao carregar em Pagar, recebe no telemóvel indicado acima (Vodacom 84 ou 85) um pedido do M-Pesa. Escreva o PIN só no menu do M-Pesa. O bilhete chega logo a seguir, por WhatsApp e nesta página."
+      : `Depois de reservar, mostramos os dados para pagar e pode enviar o comprovativo (fotografia ou PDF) nesta página. O bilhete é enviado por WhatsApp depois de confirmarmos a entrada do valor; este processo pode demorar até ${pm.prazo_confirmacao || "48 horas"}.${pm.transferencia_fechada ? ` A transferência bancária já não está disponível: fecha ${pm.fecho_transferencia_horas} horas antes do evento.` : ""}`;
+    $("#btnComprar").textContent = m?.modo === "imediato" ? "Pagar" : "Reservar"; };
+  $$("#meios input").forEach((x) => x.onchange = nota); nota();
+}
+const metodoEscolhido = () => { const v = $("input[name=meio]:checked")?.value; return (ev.pagamento?.metodos || []).find((m) => (m.id || m.meio) === v) || (v ? { id: v, meio: v, modo: null } : null); };
+const comprovativos = () => (ev.pagamento?.metodos || []).filter((m) => m.modo === "comprovativo");
+// Pagar já com M-Pesa: pede o pagamento à função "pagamentos"; se falhar, oferece pagar com comprovativo na mesma reserva
+async function pagarJa(r) {
+  const pag = $("#pagamento"); pag.classList.remove("oculto");
+  pag.innerHTML = `<h2>Pagamento M-Pesa</h2><p>Reserva feita. Total: <b>${mt(r.total)}</b>${Number(r.desconto) > 0 ? ` (desconto ${mt(r.desconto)})` : ""}.</p>
+    <p id="pagEstado" class="aviso">Enviámos um pedido de pagamento para o seu telemóvel. Abra a mensagem do M-Pesa e escreva o PIN para confirmar. Não feche esta página.</p><div id="pagAlt"></div>`;
+  const resp = await fetch(`${C.SUPABASE_URL}/functions/v1/pagamentos`, { method: "POST", headers: { "Content-Type": "application/json", apikey: C.SUPABASE_ANON_KEY, Authorization: `Bearer ${C.SUPABASE_ANON_KEY}` },
+    body: JSON.stringify({ accao: "iniciar", token_publico: r.token_publico, meio: "mpesa" }) }).then((x) => x.json()).catch((e) => ({ erro: String(e) }));
+  const est = $("#pagEstado");
+  if (resp.resultado === "pago" || resp.resultado === "ja_paga") { est.className = "ok"; est.innerHTML = `Pagamento confirmado! Os seus bilhetes seguem por WhatsApp e já estão disponíveis aqui: <a href="../t/?o=${r.token_publico}">ver os meus bilhetes</a>.`; return; }
+  est.className = "erro"; est.textContent = `O pagamento M-Pesa não foi concluído${resp.erro ? ": " + resp.erro : ""}. A sua reserva continua guardada por alguns minutos.`;
+  const alt = comprovativos();
+  $("#pagAlt").innerHTML = `<p><button class="btn grande" id="btnRetry">Tentar de novo com M-Pesa</button></p>${alt.length ? `<p class="mudo pequeno">Ou pague de outra forma e envie o comprovativo:</p>${alt.map((m) => `<p><button class="btn sec grande" data-alt="${esc(m.id)}">${esc(m.meio === "mpesa" ? "M-Pesa: pagar e enviar comprovativo" : m.nome)}</button></p>`).join("")}` : ""}`;
+  $("#btnRetry").onclick = () => pagarJa(r);
+  $$("#pagAlt [data-alt]").forEach((b) => b.onclick = async () => { b.disabled = true;
+    const { data: r2, error: e2 } = await sb.rpc("fn_pagar_com_comprovativo", { p_token: r.token_publico, p_metodo: b.dataset.alt });
+    if (e2) { b.disabled = false; return mostrarErro(est, e2); } mostrarPagamentoManual(r2); scrollTo(0, 0); });
+}
+function htmlDados(p, ref, total) {
+  const linha = (rot, val, copiar) => val ? `<div class="dl"><span class="mudo">${rot}</span><b>${esc(val)}</b>${copiar ? `<button class="btn sec mini" data-copiar="${esc(val)}">Copiar</button>` : ""}</div>` : "";
+  return `<div class="dados">` + (p.meio === "transferencia"
+    ? `<p><b>Transferência bancária</b></p>${linha("Banco", p.banco)}${linha("Em nome de", p.titular)}${linha("Conta", p.conta, true)}${linha("NIB", p.nib, true)}${linha("Valor", mt(total))}${linha("Descritivo", ref, true)}`
+    : `<p><b>${esc(p.nome)}</b></p>${linha("Número", p.numero, true)}${linha("Em nome de", p.titular)}${linha("Valor", mt(total))}${linha("Referência", ref, true)}`) + `</div>`;
+}
+const ligarCopiar = (raiz) => raiz.querySelectorAll("[data-copiar]").forEach((b) => b.onclick = () => { navigator.clipboard?.writeText(b.dataset.copiar); b.textContent = "Copiado"; setTimeout(() => b.textContent = "Copiar", 1500); });
+async function reduzir(f) { // fotografias grandes: reduz antes de enviar (poupa dados móveis)
+  if (!/^image\/(jpeg|png|webp)$/.test(f.type) || f.size < 1.5e6 || !window.createImageBitmap) return f;
+  try { const img = await createImageBitmap(f); const k = Math.min(1, 2000 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    const b = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.85)); return b && b.size < f.size ? new File([b], f.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : f; } catch { return f; } }
+async function enviarComprovativo(token, f) {
+  if (!f) throw new Error("Escolha o ficheiro do comprovativo.");
+  f = await reduzir(f);
+  const tipo = f.type || (/\.pdf$/i.test(f.name) ? "application/pdf" : /\.png$/i.test(f.name) ? "image/png" : "image/jpeg");
+  if (!["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"].includes(tipo)) throw new Error("Envie uma fotografia (JPG ou PNG) ou um PDF.");
+  if (f.size > 5 * 1024 * 1024) throw new Error("O ficheiro tem mais de 5 MB. Envie uma fotografia ou um PDF mais pequeno.");
+  const ext = { "application/pdf": "pdf", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "image/heif": "heif" }[tipo] || "jpg";
+  const caminho = `${token}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error: e1 } = await sb.storage.from("comprovativos").upload(caminho, f, { contentType: tipo, upsert: false });
+  if (e1) throw new Error(/row-level|security|403|unauthor/i.test(e1.message || "") ? "Esta reserva já não aceita comprovativos (expirou, foi paga ou já tem 5 ficheiros)." : "Não foi possível enviar o ficheiro. Verifique a ligação à internet e tente de novo.");
+  const { error: e2 } = await sb.rpc("fn_registar_comprovativo", { p_token: token, p_caminho: caminho, p_nome: (f.name || "comprovativo").slice(0, 120), p_tipo: tipo, p_tamanho: f.size });
+  if (e2) throw e2;
+}
+function mostrarPagamentoManual(r) {
+  const pag = $("#pagamento"); pag.classList.remove("oculto");
+  const prazo = r.prazo_confirmacao || ev.pagamento?.prazo_confirmacao || "48 horas";
+  pag.innerHTML = `<h2>Reserva feita: falta pagar</h2><p>Total: <b>${mt(r.total)}</b>${Number(r.desconto) > 0 ? ` (desconto ${mt(r.desconto)})` : ""}. Pague e envie o comprovativo até <b>${data(r.expira_em)}</b>; depois disso a reserva é cancelada.</p>
+    ${r.pagamento ? htmlDados(r.pagamento, r.referencia, r.total) : ""}
+    <p class="mudo pequeno">Escreva a referência <b>${esc(r.referencia)}</b> no descritivo, para encontrarmos o seu pagamento mais depressa.</p>
+    <h3>Enviar o comprovativo</h3><p class="mudo pequeno">Fotografia ou PDF do comprovativo, até 5 MB.</p>
+    <input type="file" id="fComp" accept="image/*,application/pdf"><p><button class="btn grande" id="btnComp">Enviar comprovativo</button></p><p id="compMsg" class="oculto"></p>
+    <p class="aviso">O bilhete será enviado por WhatsApp depois de confirmarmos a entrada do valor na nossa conta. Este processo pode demorar até ${esc(prazo)}.</p>
+    <p class="pequeno">Pode enviar o comprovativo mais tarde ou acompanhar a reserva nesta ligação (guarde-a): <a href="../t/?o=${r.token_publico}">a minha reserva</a></p>`;
+  ligarCopiar(pag);
+  $("#btnComp").onclick = async () => { const msg = $("#compMsg"); msg.className = "oculto"; $("#btnComp").disabled = true; $("#btnComp").textContent = "A enviar…";
+    try { await enviarComprovativo(r.token_publico, $("#fComp").files[0]); msg.className = "ok"; msg.textContent = `Recebemos o seu comprovativo. Vamos confirmar a entrada do valor e enviamos o bilhete por WhatsApp (até ${prazo}).`; $("#fComp").value = ""; $("#btnComp").textContent = "Enviar outro ficheiro"; }
+    catch (e) { mostrarErro(msg, e); $("#btnComp").textContent = "Enviar comprovativo"; }
+    $("#btnComp").disabled = false; };
+}
+const sobeTxt = (p) => p.proximo_preco && p.lote_termina_em ? `<div class="sobe">Sobe para ${mt(p.proximo_preco)} ${p.lote_termina_apos_qtd ? `ao esgotar ${p.lote_termina_apos_qtd - p.vendidos} bilhetes ou ` : ""}a ${data(p.lote_termina_em)}</div>` : "";
 function desenharTipos() {
-  $("#tipos").innerHTML = ev.precos.filter((p) => p.venda_aberta).map((p) => {
-    const sobe = p.proximo_preco && p.lote_termina_em ? `<div class="sobe">Sobe para ${mt(p.proximo_preco)} ${p.lote_termina_apos_qtd ? `ao esgotar ${p.lote_termina_apos_qtd - p.vendidos} bilhetes ou ` : ""}a ${data(p.lote_termina_em)}</div>` : "";
+  const ab = ev.precos.filter((p) => p.venda_aberta);
+  const maxAd = idadeAdulto();
+  modoIdades = ab.some((p) => temIdade(p) && p.idade_max != null && p.idade_max < maxAd) && !!tipoIdade(maxAd);
+  $("#passo1 h2").textContent = modoIdades ? "1. Quantas pessoas?" : "1. Bilhetes";
+  const outros = modoIdades ? ab.filter((p) => !temIdade(p)) : ab;
+  $("#tipos").innerHTML = (modoIdades ? htmlIdades() : "") + (modoIdades && outros.length ? "<h3>Outros bilhetes</h3>" : "") + outros.map((p) => {
+    const sobe = sobeTxt(p);
     const esg = p.disponivel <= 0;
-    return `<div class="tipo"><div><b>${esc(p.nome)}</b> <span class="etiqueta">${mt(p.preco)}</span>${p.lote ? ` <span class="mudo pequeno">${esc(p.lote)}</span>` : ""}${sobe}${esg ? "<div class='sobe'>Esgotado</div>" : ""}</div>
+    return `<div class="tipo"><div><b>${esc(p.nome)}</b> <span class="etiqueta">${mt(p.preco)}</span>${p.lote ? ` <span class="mudo pequeno">${esc(p.lote)}</span>` : ""}${p.escaloes?.length ? `<div class="sobe">${textoEscaloes(p.escaloes, p.preco)}</div>` : ""}${sobe}${esg ? "<div class='sobe'>Esgotado</div>" : ""}</div>
       <div class="qtd"><button data-t="${p.tipo_bilhete_id}" data-d="-1" ${esg ? "disabled" : ""}>−</button><span id="q-${p.tipo_bilhete_id}">${qtds[p.tipo_bilhete_id] || 0}</span><button data-t="${p.tipo_bilhete_id}" data-d="1" ${esg ? "disabled" : ""}>+</button></div></div>`;
   }).join("");
-  $$("#tipos button").forEach((b) => b.onclick = () => { const t = b.dataset.t; const p = ev.precos.find((x) => x.tipo_bilhete_id === t); qtds[t] = Math.max(0, Math.min(p.disponivel, 10, (qtds[t] || 0) + Number(b.dataset.d))); $("#q-" + t).textContent = qtds[t]; total(); });
+  $$("#tipos button[data-t]").forEach((b) => b.onclick = () => { const t = b.dataset.t; const p = ev.precos.find((x) => x.tipo_bilhete_id === t); const d = Number(b.dataset.d);
+    if (d > 0 && pessoas() >= MAX_ONLINE) return; qtds[t] = Math.max(0, Math.min(p.disponivel, MAX_ONLINE, (qtds[t] || 0) + d)); $("#q-" + t).textContent = qtds[t]; total(); });
+  if (modoIdades) ligarIdades(); else total();
+}
+function htmlIdades() {
+  const ad = tipoIdade(idadeAdulto()), maxAd = idadeAdulto();
+  const filhos = ev.precos.filter((p) => p.venda_aberta && temIdade(p) && p.idade_max != null && p.idade_max < maxAd).sort((a, b) => (a.idade_min ?? 0) - (b.idade_min ?? 0));
+  const e = (ad.escaloes || []).slice().sort((a, b) => a.min - b.min);
+  const grupo = e.length ? `<div class="sobe">Preço por adulto conforme o número de adultos: ${[`até ${e[0].min - 1}, ${mt(ad.preco)}`, ...e.map((x, i) => `${x.min}${e[i + 1] ? " a " + (e[i + 1].min - 1) : " ou mais"}, ${mt(x.preco)}`)].join("; ")}</div>` : "";
+  return `<div class="tipo"><div><b>Adultos</b> <span class="mudo pequeno">${maxAd} anos ou mais</span><div class="pequeno">${mt(ad.preco)} por pessoa${ad.lote ? ` <span class="mudo">(${esc(ad.lote)})</span>` : ""}</div>${grupo}${sobeTxt(ad)}${ad.disponivel <= 0 ? "<div class='sobe'>Esgotado</div>" : ""}</div>
+      <div class="qtd"><button id="adMenos" aria-label="Menos um adulto">−</button><span id="nAd">${adultos}</span><button id="adMais" aria-label="Mais um adulto">+</button></div></div>
+    <div class="tipo"><div><b>Crianças</b> <span class="mudo pequeno">até ${maxAd - 1} anos</span><div class="pequeno">${filhos.map((p) => `${faixa(p)}: ${precoOuGratis(p.preco)}`).join("; ")}</div>${filhos.map((p) => p.proximo_preco && p.lote_termina_em ? `<div class="sobe">${faixa(p)}: sobe para ${mt(p.proximo_preco)} a ${data(p.lote_termina_em)}</div>` : "").join("")}</div>
+      <div class="qtd"><button id="crMenos" aria-label="Menos uma criança">−</button><span id="nCr">${idades.length}</span><button id="crMais" aria-label="Mais uma criança">+</button></div></div>
+    <div id="idades"></div><p id="maxNota" class="mudo pequeno oculto">Na compra online o máximo é de ${MAX_ONLINE} pessoas por compra (crianças incluídas). Para grupos maiores, contacte-nos.</p><div id="linhas" class="linhas"></div>`;
+}
+function ligarIdades() {
+  const ad = tipoIdade(idadeAdulto());
+  adultos = Math.max(0, Math.min(adultos, ad.disponivel));
+  $("#adMenos").onclick = () => { adultos = Math.max(0, adultos - 1); aplicarIdades(); };
+  $("#adMais").onclick = () => { if (pessoas() < MAX_ONLINE && adultos < ad.disponivel) adultos++; aplicarIdades(); };
+  $("#crMenos").onclick = () => { idades.pop(); desenharIdades(); aplicarIdades(); };
+  $("#crMais").onclick = () => { if (pessoas() < MAX_ONLINE) { idades.push(null); desenharIdades(); $("#id" + (idades.length - 1))?.focus(); } aplicarIdades(); };
+  desenharIdades(); aplicarIdades();
+}
+function desenharIdades() {
+  const maxAd = idadeAdulto();
+  $("#idades").innerHTML = idades.map((a, i) => `<div class="idade"><label for="id${i}">Idade da criança ${i + 1}</label><select id="id${i}" data-i="${i}"><option value="">Escolha a idade</option>${Array.from({ length: maxAd }, (_, k) => `<option value="${k}" ${a === k ? "selected" : ""}>${nomeIdade(k)}</option>`).join("")}</select></div>`).join("");
+  $$("#idades select").forEach((s) => s.onchange = () => { idades[Number(s.dataset.i)] = s.value === "" ? null : Number(s.value); aplicarIdades(); });
+}
+function aplicarIdades() {
+  for (const p of ev.precos) if (temIdade(p)) delete qtds[p.tipo_bilhete_id];
+  const ad = tipoIdade(idadeAdulto());
+  if (adultos > 0) qtds[ad.tipo_bilhete_id] = adultos;
+  semTipo = [];
+  for (const a of idades) { if (a == null) continue; const t = tipoIdade(a); if (!t) { semTipo.push(a); continue; } qtds[t.tipo_bilhete_id] = (qtds[t.tipo_bilhete_id] || 0) + 1; }
+  $("#nAd").textContent = adultos; $("#nCr").textContent = idades.length;
+  $("#maxNota").classList.toggle("oculto", pessoas() < MAX_ONLINE);
   total();
 }
-function total() { let s = 0; for (const p of ev.precos) s += (qtds[p.tipo_bilhete_id] || 0) * Number(p.preco); $("#total").textContent = mt(s); return s; }
+function desenharLinhas(itens) {
+  if (!modoIdades) return;
+  const faltam = idades.filter((a) => a == null).length;
+  $("#linhas").innerHTML = (itens || []).map((i) => `<div class="ln"><span>${i.quantidade} × ${esc(i.nome)}${Number(i.preco_unitario) > 0 ? `<br><span class="mudo pequeno">${mt(i.preco_unitario)} por pessoa</span>` : ""}</span><b>${precoOuGratis(i.subtotal)}</b></div>`).join("")
+    + (faltam ? `<p class="aviso pequeno">Escolha a idade de ${faltam === 1 ? "1 criança" : faltam + " crianças"} para calcular o preço.</p>` : "")
+    + (semTipo.length ? `<p class="erro pequeno">Não há bilhetes à venda para crianças de ${listaE(semTipo.map(nomeIdade))}.</p>` : "");
+}
+function total() {
+  // estimativa imediata (mesmas regras do servidor); o servidor confirma logo a seguir
+  const grupo = ev.precos.filter((p) => p.conta_grupo).reduce((s, p) => s + (qtds[p.tipo_bilhete_id] || 0), 0);
+  const loc = ev.precos.filter((p) => (qtds[p.tipo_bilhete_id] || 0) > 0).map((p) => { const u = precoEscalao(p.preco, p.escaloes, p.conta_grupo ? grupo : 0);
+    return { tipo_bilhete_id: p.tipo_bilhete_id, nome: p.nome, quantidade: qtds[p.tipo_bilhete_id], preco_unitario: u, subtotal: u * qtds[p.tipo_bilhete_id] }; });
+  const s = loc.reduce((t, i) => t + i.subtotal, 0);
+  $("#total").textContent = mt(s); desenharLinhas(loc);
+  clearTimeout(cotT); const n = ++cotN; const itens = loc.map((i) => ({ tipo_bilhete_id: i.tipo_bilhete_id, quantidade: i.quantidade }));
+  if (itens.length) cotT = setTimeout(async () => { const { data: c } = await sb.rpc("fn_cotar_encomenda", { p_evento: ev.id, p_itens: itens, p_telemovel: null });
+    if (c && n === cotN) { $("#total").textContent = mt(c.total); desenharLinhas(c.itens); } }, 200);
+  return s; }
 
 $("#btnComprar").onclick = async () => {
   const erro = $("#erroForm"); erro.classList.add("oculto");
   const itens = Object.entries(qtds).filter(([, q]) => q > 0).map(([t, q]) => ({ tipo_bilhete_id: t, quantidade: q }));
-  if (!itens.length) return mostrarErro(erro, "Escolha pelo menos um bilhete.");
+  if (modoIdades) {
+    if (adultos < 1 && idades.length) return mostrarErro(erro, "Indique pelo menos 1 adulto. As crianças têm de vir acompanhadas.");
+    if (idades.some((a) => a == null)) return mostrarErro(erro, "Escolha a idade de cada criança.");
+    if (semTipo.length) return mostrarErro(erro, `Não há bilhetes à venda para crianças de ${listaE(semTipo.map(nomeIdade))}.`);
+    for (const p of ev.precos) if ((qtds[p.tipo_bilhete_id] || 0) > p.disponivel) return mostrarErro(erro, `Já só há ${p.disponivel} bilhete(s) de ${p.nome}.`);
+  }
+  if (!itens.length) return mostrarErro(erro, modoIdades ? "Indique quantos adultos vêm." : "Escolha pelo menos um bilhete.");
+  if (itens.reduce((t, i) => t + i.quantidade, 0) > MAX_ONLINE) return mostrarErro(erro, `Na compra online o máximo é de ${MAX_ONLINE} bilhetes. Para grupos maiores, contacte-nos.`);
+  const observacoes = modoIdades && idades.length ? `${adultos} adulto(s); idades das crianças: ${listaE(idades.map((a) => a === 0 ? "menos de 1" : String(a)))} anos` : null;
   if ($("#cNome").value.trim().length < 3) return mostrarErro(erro, "Indique o seu nome completo.");
   if (!telemovelValido($("#cTel").value)) return mostrarErro(erro, "Indique um telemóvel válido (ex. 84 123 4567).");
   if (!$("#cTermos").checked) return mostrarErro(erro, "É necessário aceitar os termos.");
+  const met = metodoEscolhido(); if (!met) return mostrarErro(erro, "Escolha a forma de pagamento.");
+  if (met.modo === "imediato" && !/^(258)?8[45]\d{7}$/.test($("#cTel").value.replace(/\D/g, ""))) return mostrarErro(erro, "Para pagar já com M-Pesa, o telemóvel tem de ser Vodacom (84 ou 85). Corrija o número ou escolha outra forma de pagar.");
   $("#btnComprar").disabled = true;
-  const meio = $("input[name=meio]:checked").value;
+  const meio = met.meio;
   const { data: r, error } = await sb.rpc("fn_criar_encomenda_online", { p: { evento_id: ev.id, cliente: { telemovel: $("#cTel").value, nome: $("#cNome").value.trim(), email: $("#cEmail").value.trim() },
-    itens, codigo_promo: $("#promo").value.trim() || null, aceita_termos: true, aceita_whatsapp: $("#cWa").checked, aceita_sms: $("#cSms").checked, meio_pagamento: meio }, p_ua: navigator.userAgent.slice(0, 200) });
+    itens, observacoes, codigo_promo: $("#promo").value.trim() || null, aceita_termos: true, aceita_whatsapp: $("#cWa").checked, aceita_sms: $("#cSms").checked, meio_pagamento: meio, modo_pagamento: met.modo || undefined }, p_ua: navigator.userAgent.slice(0, 200) });
   if (error) { mostrarErro(erro, error); $("#btnComprar").disabled = false; return; }
   for (const id of ["passo1", "passo2", "passo3", "passo4"]) $("#" + id).classList.add("oculto");
+  scrollTo(0, 0);
+  if (r.comprovativo) return mostrarPagamentoManual(r);
+  if (r.imediato) return pagarJa(r);
+  // pagamento automático pela operadora (quando houver ligação à API)
   const pag = $("#pagamento"); pag.classList.remove("oculto");
   pag.innerHTML = `<h2>Pagamento</h2><p>Reserva feita. Total: <b>${mt(r.total)}</b>${Number(r.desconto) > 0 ? ` (desconto ${mt(r.desconto)})` : ""}. Tem até ${data(r.expira_em, { dateStyle: undefined, timeStyle: "short" })} para pagar.</p><p id="pagEstado" class="aviso">A enviar o pedido de pagamento para o seu telemóvel… confirme com o PIN.</p>`;
   const resp = await fetch(`${C.SUPABASE_URL}/functions/v1/pagamentos`, { method: "POST", headers: { "Content-Type": "application/json", apikey: C.SUPABASE_ANON_KEY, Authorization: `Bearer ${C.SUPABASE_ANON_KEY}` },
