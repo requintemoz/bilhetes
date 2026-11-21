@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Venda de bilhetes</title>
+<link rel="stylesheet" href="../comum.css">
+<style>
+  .contentor{max-width:960px}
+  .grelha{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  .tabs{display:flex;gap:6px;margin:8px 0;flex-wrap:wrap}.tabs button{background:#fff;border:1px solid var(--borda);border-radius:999px;padding:8px 14px;font-weight:600;cursor:pointer}.tabs button.act{background:var(--azul);color:#fff;border-color:var(--azul)}
+  table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--borda);vertical-align:top}th{font-size:.75rem;text-transform:uppercase;color:var(--cinza)}
+  td.num,th.num{text-align:right}
+  .estado-paga{color:var(--verde);font-weight:700}.estado-reservada{color:var(--amarelo);font-weight:700}.estado-cancelada,.estado-reembolsada,.estado-anulado{color:var(--vermelho)}
+  dialog{border:0;border-radius:16px;padding:0;width:min(640px,96vw)}dialog .cartao{margin:0;border:0}dialog::backdrop{background:rgba(0,0,0,.4)}
+  .acc{display:flex;gap:6px;flex-wrap:wrap}.acc .btn{padding:6px 10px;min-height:0;font-size:.85rem;width:auto}
+  .trocar{overflow:auto}
+  .badge{display:inline-block;min-width:20px;padding:1px 7px;border-radius:999px;background:var(--verde);color:#fff;font-size:.75rem;text-align:center;margin-left:2px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}.kpis div{background:#fff;border:1px solid var(--borda);border-radius:12px;padding:12px}.kpis b{display:block;font-size:1.4rem}
+  textarea#waTexto{font-family:inherit;font-size:.95rem}
+  tr.total td{font-weight:700;border-top:2px solid var(--borda)}
+  @media(max-width:700px){table{font-size:.85rem}}
+</style>
+</head>
+<body>
+<div class="contentor">
+  <div class="topo"><div><b>Venda de bilhetes</b> <span class="mudo" id="quem"></span></div><div class="linha"><button class="btn sec oculto" id="btnSair">Sair</button></div></div>
+
+  <section id="login" class="cartao" style="max-width:420px;margin:30px auto">
+    <h2>Entrar</h2>
+    <p>Entre com o seu nome e o PIN que lhe foi dado.</p>
+    <p><a class="btn" id="btnPin" href="../entrar/?para=promotor">Entrar com nome e PIN</a></p>
+    <p id="loginMsg" class="oculto"></p>
+  </section>
+
+  <div id="app" class="oculto">
+    <div class="topo"><div><h1 id="evNome"></h1><div class="mudo" id="evQuando"></div></div><select id="selEv" class="oculto" style="width:auto"></select></div>
+    <div class="tabs" id="abas"><button data-aba="vender" class="act">Vender</button><button data-aba="vendas">As minhas vendas</button><button data-aba="resumo">Resumo do evento</button><button data-aba="whatsapp">WhatsApp <span id="badgeWa" class="badge oculto"></span></button></div>
+    <div id="conteudo"></div>
+  </div>
+</div>
+<dialog id="dlg"><div class="cartao" id="dlgCorpo"></div></dialog>
+
+<script src="../config.js"></script>
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { C, $, $$, esc, data, mt, mostrarErro } from "../comum.js";
+const sb = createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
+let eu = null, eventos = [], evId = null, painel = null, aba = "vender";
+const conteudo = $("#conteudo");
+const MEIOS = [{ x: "numerario", n: "Numerário" }, { x: "mpesa", n: "M-Pesa" }, { x: "mkesh", n: "mKesh" }, { x: "pos_bancario", n: "POS bancário" }, { x: "transferencia", n: "Transferência bancária" }];
+const MEIO_NOME = Object.fromEntries(MEIOS.map((m) => [m.x, m.n]));
+const precisaRef = (meio) => ["mpesa", "mkesh", "transferencia"].includes(meio);
+const fmtTel = (t) => String(t || "").replace(/^\+258(\d{2})(\d{3})(\d{4})$/, "+258 $1 $2 $3");
+const urlWa = (numero, texto) => `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+const textoEscaloes = (escaloes, base) => { const e = (escaloes || []).slice().sort((a, b) => a.min - b.min); if (!e.length) return "";
+  return "Em grupo: " + [`até ${e[0].min - 1}, ${mt(base)}`, ...e.map((x, i) => `${x.min}${e[i + 1] ? " a " + (e[i + 1].min - 1) : " ou mais"}, ${mt(x.preco)}`)].join("; ") + " por pessoa"; };
+const v = (id) => $("#" + id)?.value?.trim();
+const campo = (id, rot, tipo = "text", val = "", extra = "") => `<label for="${id}">${rot}</label><input id="${id}" type="${tipo}" value="${esc(val)}" ${extra}>`;
+async function rpc(fn, args) { const { data, error } = await sb.rpc(fn, args); if (error) throw new Error(error.message); return data; }
+function dialogo(html, onOpen) { $("#dlgCorpo").innerHTML = html + `<p class="linha" style="justify-content:flex-end"><button class="btn sec" id="dlgFechar">Fechar</button></p>`; $("#dlg").showModal(); $("#dlgFechar").onclick = () => $("#dlg").close(); onOpen?.(); }
+function msgLogin(t, erro) { const m = $("#loginMsg"); m.className = erro ? "erro" : "ok"; m.textContent = t; }
+
+// ---------- sessão ----------
+$("#btnPin").href = new URL("../entrar/?para=promotor", location.href).href;
+$("#btnSair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+async function arranque() {
+  const { data: { session } } = await sb.auth.getSession(); if (!session) return;
+  const { data: s } = await sb.rpc("fn_staff_actual");
+  $("#btnSair").classList.remove("oculto");
+  if (s?.perfil && s.perfil !== "promotor") { location.replace("../admin/"); return; }
+  if (!s?.id || s.perfil !== "promotor") return msgLogin("Esta conta não tem acesso à venda de bilhetes.", true);
+  eu = s; $("#quem").textContent = `· ${s.nome}`;
+  try { eventos = await rpc("fn_promotor_eventos"); } catch (e) { return msgLogin(e.message, true); }
+  if (!eventos.length) return msgLogin("Ainda não tem nenhum evento atribuído. Fale com a Requinte.", true);
+  $("#login").classList.add("oculto"); $("#app").classList.remove("oculto");
+  const aVenda = eventos.filter((e) => e.estado === "a_venda");
+  evId = (aVenda[0] || eventos[0]).id;
+  if (eventos.length > 1) { const sel = $("#selEv"); sel.classList.remove("oculto"); sel.innerHTML = eventos.map((e) => `<option value="${e.id}" ${e.id === evId ? "selected" : ""}>${esc(e.nome)}</option>`).join(""); sel.onchange = () => { evId = sel.value; carregar(); }; }
+  $$("#abas button").forEach((b) => b.onclick = () => { aba = b.dataset.aba; $$("#abas button").forEach((x) => x.classList.toggle("act", x === b)); desenhar(); });
+  await carregar(); setInterval(actualizarBadge, 60000);
+}
+async function carregar() {
+  try { painel = await rpc("fn_promotor_painel", { p_evento: evId }); }
+  catch (e) { conteudo.innerHTML = `<div class="erro">${esc(e.message)}</div>`; return; }
+  $("#evNome").textContent = painel.evento.nome;
+  $("#evQuando").textContent = `${data(painel.evento.inicio_em)}${painel.evento.local ? " · " + painel.evento.local : ""}${painel.evento.estado !== "a_venda" ? " · venda fechada" : ""}`;
+  actualizarBadge(); desenhar();
+}
+function desenhar() { ({ vender, vendas, resumo, whatsapp }[aba] || vender)(); }
+async function actualizarBadge() { try { const n = await rpc("fn_whatsapp_contar"); const b = $("#badgeWa"); b.textContent = n; b.classList.toggle("oculto", !n); } catch {} }
+
+// ---------- vender ----------
+function vender() {
+  if (painel.evento.estado !== "a_venda") { conteudo.innerHTML = `<div class="cartao"><p>A venda para este evento está fechada.</p></div>`; return; }
+  const tipos = painel.tipos || [];
+  conteudo.innerHTML = `<div class="cartao"><h2>Nova venda</h2><div class="grelha">
+    <div>${campo("vTel", "Telemóvel do cliente (WhatsApp)", "tel", "", 'placeholder="84 123 4567" autocomplete="off"')}${campo("vNome", "Nome do cliente", "text", "", 'autocomplete="off"')}${campo("vEmail", "Email (opcional)", "email", "", 'autocomplete="off"')}</div>
+    <div><label>Bilhetes</label>${tipos.map((t) => `<div class="linha" style="margin-bottom:6px"><span style="flex:1">${esc(t.nome)} · ${mt(t.preco)} <span class="mudo pequeno">${t.venda_aberta ? t.disponivel + " disp." : "venda fechada"}</span>${t.escaloes?.length ? `<br><span class="mudo pequeno">${textoEscaloes(t.escaloes, t.preco)}</span>` : ""}</span>${t.multiplos?.length ? `<select data-tipo="${t.tipo_bilhete_id}" style="width:90px" ${t.disponivel > 0 && t.venda_aberta ? "" : "disabled"}>${[0, ...t.multiplos].map((n) => `<option value="${n}">${n}</option>`).join("")}</select>` : `<input type="number" min="0" max="20" value="0" data-tipo="${t.tipo_bilhete_id}" style="width:80px" ${t.disponivel > 0 && t.venda_aberta ? "" : "disabled"}>`}</div>${t.multiplos?.length ? `<p class="mudo pequeno" style="margin:-4px 0 8px">Vende-se por mesa: ${t.multiplos.join(", ")} lugares.</p>` : ""}`).join("") || `<p class="mudo">Sem bilhetes à venda.</p>`}
+      <p class="pequeno">Total: <b id="vTotal">0 MT</b><br><span id="vDetalhe" class="mudo"></span></p></div>
+    <div><label>Pagamento</label>
+      <div class="cx"><input type="radio" name="vPago" id="vPagoSim"><label for="vPagoSim" style="margin:0">Já pagou</label></div>
+      <div class="cx"><input type="radio" name="vPago" id="vPagoNao"><label for="vPagoNao" style="margin:0">Ainda não pagou (fica reservado)</label></div>
+      <div id="vPagoCampos" class="oculto"><label for="vMeio">Meio</label><select id="vMeio">${MEIOS.map((m) => `<option value="${m.x}">${m.n}</option>`).join("")}</select>${campo("vRef", "Referência do comprovativo", "text", "", 'placeholder="ex. QK7H2X9"')}</div></div></div>
+    <p class="mudo pequeno">O cliente recebe por WhatsApp a ligação para aceitar os termos e, depois de pago, os bilhetes com o código QR.</p>
+    <p><button class="btn" id="btnVender">Registar venda</button></p><p id="vMsg" class="oculto"></p></div>`;
+  let cotT = null;
+  const total = () => { clearTimeout(cotT); cotT = setTimeout(async () => {
+    const itens = $$("[data-tipo]").map((i) => ({ tipo_bilhete_id: i.dataset.tipo, quantidade: Number(i.value || 0) })).filter((i) => i.quantidade > 0);
+    if (!itens.length) { $("#vTotal").textContent = mt(0); $("#vDetalhe").textContent = ""; return; }
+    try { const c = await rpc("fn_cotar_encomenda", { p_evento: evId, p_itens: itens, p_telemovel: null }); $("#vTotal").textContent = mt(c.total); $("#vDetalhe").textContent = c.itens.map((x) => `${x.quantidade}× ${x.nome} a ${mt(x.preco_unitario)}`).join(", "); }
+    catch { let t = 0; for (const i of itens) t += i.quantidade * Number(tipos.find((x) => x.tipo_bilhete_id === i.tipo_bilhete_id)?.preco || 0); $("#vTotal").textContent = mt(t); $("#vDetalhe").textContent = ""; } }, 200); };
+  $$("[data-tipo]").forEach((i) => { i.oninput = total; i.onchange = total; });
+  $$("[name=vPago]").forEach((r) => r.onchange = () => $("#vPagoCampos").classList.toggle("oculto", !$("#vPagoSim").checked));
+  $("#btnVender").onclick = async () => {
+    const itens = $$("[data-tipo]").map((i) => ({ tipo_bilhete_id: i.dataset.tipo, quantidade: Number(i.value) })).filter((i) => i.quantidade > 0);
+    const pago = $("#vPagoSim").checked ? true : $("#vPagoNao").checked ? false : null;
+    if (!v("vTel") || !v("vNome")) return mostrarErro($("#vMsg"), "Indique o telemóvel e o nome do cliente.");
+    if (!itens.length) return mostrarErro($("#vMsg"), "Escolha pelo menos um bilhete.");
+    if (pago === null) return mostrarErro($("#vMsg"), "Indique se o cliente já pagou.");
+    if (pago && precisaRef(v("vMeio")) && !v("vRef")) return mostrarErro($("#vMsg"), "Escreva a referência que vem no comprovativo.");
+    $("#btnVender").disabled = true; let r = null;
+    try {
+      r = await rpc("fn_criar_encomenda", { p: { evento_id: evId, cliente: { telemovel: v("vTel"), nome: v("vNome"), email: v("vEmail") }, itens, canal: "assistida", entrega: "whatsapp" } });
+      if (pago) await rpc("fn_confirmar_pagamento", { p_encomenda: r.encomenda_id, p_meio: v("vMeio"), p_referencia: v("vRef") || null, p_documento_fiscal: null });
+    } catch (e) {
+      $("#btnVender").disabled = false;
+      if (!r) return mostrarErro($("#vMsg"), e);
+      await carregar(); mostrarErro($("#vMsg"), `A venda ficou registada como reserva, mas o pagamento não foi confirmado: ${e.message}`); return;
+    }
+    await carregar(); $("#vMsg").className = "ok"; $("#vMsg").textContent = `Venda registada (${mt(r.total)}${pago ? ", paga" : `, reservada até ${data(r.expira_em)}`}).`;
+    abrirWhatsapp(r.encomenda_id);
+  };
+}
+
+// ---------- as minhas vendas ----------
+function vendas() {
+  const lista = painel.vendas || [];
+  conteudo.innerHTML = `<div class="cartao trocar"><table><tr><th>Quando</th><th>Cliente</th><th>Bilhetes</th><th class="num">Total</th><th>Estado</th><th></th></tr>${lista.map((e) => `<tr>
+    <td class="pequeno">${data(e.criado_em)}</td><td><b>${esc(e.cliente)}</b><br><span class="mudo pequeno">${esc(fmtTel(e.telemovel))}</span></td>
+    <td class="pequeno">${(e.itens || []).map((i) => `${i.q}× ${esc(i.tipo)}`).join(", ")}${e.bilhetes?.length ? "<br>" + e.bilhetes.map((b) => b.estado === "emitido" || b.estado === "utilizado" ? `<a href="../b/?t=${b.token}" target="_blank" rel="noopener">${b.codigo}</a>` : `<span class="estado-anulado">${b.codigo}</span>`).join(" ") : ""}</td>
+    <td class="num">${mt(e.total)}${e.meio ? `<br><span class="mudo pequeno">${esc(MEIO_NOME[e.meio] || e.meio)} ${esc(e.referencia || "")}</span>` : ""}</td>
+    <td><span class="estado-${e.estado}">${e.estado}</span><br><span class="mudo pequeno">${e.termos ? "termos aceites" : "termos por aceitar"}${e.estado === "reservada" && e.expira_em ? "<br>expira " + data(e.expira_em) : ""}</span></td>
+    <td class="acc">${e.estado === "reservada" ? `<button class="btn" data-pagar="${e.id}">Confirmar pagamento</button>` : ""}${["reservada", "paga"].includes(e.estado) ? `<button class="btn verde" data-wa="${e.id}">WhatsApp</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="6" class="mudo">Ainda não registou vendas para este evento.</td></tr>`}</table></div>`;
+  $$("[data-wa]").forEach((b) => b.onclick = () => abrirWhatsapp(b.dataset.wa));
+  $$("[data-pagar]").forEach((b) => b.onclick = () => confirmarPagamento(lista.find((x) => x.id === b.dataset.pagar)));
+}
+function confirmarPagamento(e) {
+  dialogo(`<h2>Confirmar pagamento</h2><p><b>${esc(e.cliente)}</b> · ${mt(e.total)}</p><label for="pMeio">Meio</label><select id="pMeio">${MEIOS.map((m) => `<option value="${m.x}">${m.n}</option>`).join("")}</select>${campo("pRef", "Referência do comprovativo")}<p class="mudo pequeno">Confirme o valor e a referência no comprovativo. A mesma referência não pode pagar duas vendas.</p><p><button class="btn" id="pOk">Confirmar</button></p><p id="pMsg" class="oculto"></p>`, () => {
+    $("#pOk").onclick = async () => { if (precisaRef(v("pMeio")) && !v("pRef")) return mostrarErro($("#pMsg"), "Escreva a referência que vem no comprovativo.");
+      try { await rpc("fn_confirmar_pagamento", { p_encomenda: e.id, p_meio: v("pMeio"), p_referencia: v("pRef") || null, p_documento_fiscal: null }); $("#dlg").close(); await carregar(); abrirWhatsapp(e.id); } catch (er) { mostrarErro($("#pMsg"), er); } }; });
+}
+
+// ---------- resumo do evento ----------
+function resumo() {
+  const r = painel.resumo || []; const soma = (k) => r.reduce((a, x) => a + Number(x[k] || 0), 0);
+  conteudo.innerHTML = `<div class="kpis"><div><span class="mudo pequeno">Vendidos por si</span><b>${soma("meus_pagos")}</b><span class="pequeno">${mt(soma("meus_valor"))}</span></div>
+    <div><span class="mudo pequeno">Vendidos pela Requinte</span><b>${soma("outros_pagos")}</b><span class="pequeno">${mt(soma("outros_valor"))}</span></div>
+    <div><span class="mudo pequeno">Total vendido</span><b>${soma("meus_pagos") + soma("outros_pagos")}</b><span class="pequeno">${mt(soma("meus_valor") + soma("outros_valor"))}</span></div>
+    <div><span class="mudo pequeno">As suas reservas por pagar</span><b>${soma("meus_reservados")}</b></div></div>
+  <div class="cartao trocar"><h2>Por tipo de bilhete (só vendas pagas)</h2><table><tr><th>Tipo</th><th class="num">Por si</th><th class="num">Valor</th><th class="num">Requinte</th><th class="num">Valor</th><th class="num">Disponíveis</th></tr>
+    ${r.map((x) => `<tr><td>${esc(x.tipo)}</td><td class="num">${x.meus_pagos}</td><td class="num">${mt(x.meus_valor)}</td><td class="num">${x.outros_pagos}</td><td class="num">${mt(x.outros_valor)}</td><td class="num">${x.disponivel}</td></tr>`).join("")}
+    <tr class="total"><td>Total</td><td class="num">${soma("meus_pagos")}</td><td class="num">${mt(soma("meus_valor"))}</td><td class="num">${soma("outros_pagos")}</td><td class="num">${mt(soma("outros_valor"))}</td><td class="num"></td></tr></table>
+    <p class="mudo pequeno">Valores pelo preço de cada bilhete na altura da venda. Actualizado às ${new Date().toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" })}.</p><p><button class="btn sec" id="btnActualizar">Actualizar</button></p></div>`;
+  $("#btnActualizar").onclick = carregar;
+}
+
+// ---------- WhatsApp ----------
+async function abrirWhatsapp(encId) { try { dialogoWa(await rpc("fn_whatsapp_texto", { p_encomenda: encId, p_cliente: null })); } catch (e) { alert(e.message); } }
+function dialogoWa(w, aoFechar) {
+  if (!w.wa || !w.texto) { dialogo(`<h2>WhatsApp</h2><p>${esc(w.aviso || "Nada para enviar.")}</p>`); return; }
+  dialogo(`<h2>Enviar por WhatsApp</h2><p>Para <b>${esc(w.nome)}</b> · ${esc(fmtTel(w.telemovel))}</p>${w.aviso ? `<div class="erro">${esc(w.aviso)}</div>` : ""}
+    <label for="waTexto">Mensagem (pode ajustar antes de abrir)</label><textarea id="waTexto" rows="10">${esc(w.texto)}</textarea>
+    <p class="mudo pequeno">Abre o WhatsApp deste telemóvel com a mensagem já escrita. Só tem de carregar em enviar.</p>
+    <p class="linha"><a class="btn verde" id="waAbrir" target="_blank" rel="noopener">Abrir no WhatsApp</a><button class="btn sec" id="waCopiar">Copiar texto</button>${w.ids?.length ? `<button class="btn sec" id="waIgnorar">Não enviar</button>` : ""}</p>`, () => {
+    const texto = () => $("#waTexto").value.trim();
+    const act = () => { $("#waAbrir").href = urlWa(w.wa, texto()); }; act(); $("#waTexto").oninput = act;
+    $("#waAbrir").onclick = () => { rpc("fn_whatsapp_marcar", { p_ids: w.ids || [], p_enviada: true, p_encomenda: w.encomenda_id || null, p_cliente: w.cliente_id || null, p_texto: texto() }).then(actualizarBadge).catch(() => {}); setTimeout(() => { $("#dlg").close(); aoFechar?.(); }, 300); };
+    $("#waCopiar").onclick = async () => { try { await navigator.clipboard.writeText(texto()); $("#waCopiar").textContent = "Copiado"; } catch { $("#waTexto").select(); } };
+    $("#waIgnorar") && ($("#waIgnorar").onclick = async () => { await rpc("fn_whatsapp_marcar", { p_ids: w.ids, p_enviada: false }); actualizarBadge(); $("#dlg").close(); aoFechar?.(); });
+  });
+}
+async function whatsapp() {
+  let fila = []; try { fila = await rpc("fn_whatsapp_fila"); } catch (e) { conteudo.innerHTML = `<div class="erro">${esc(e.message)}</div>`; return; }
+  actualizarBadge();
+  conteudo.innerHTML = `<p class="mudo">Mensagens das suas vendas que falta enviar (por exemplo, os bilhetes depois de o cliente aceitar os termos).</p><div class="cartao trocar"><table><tr><th>Desde</th><th>Para</th><th>Mensagem</th><th></th></tr>${fila.map((w, i) => `<tr><td class="pequeno">${data(w.desde)}</td><td><b>${esc(w.nome || "")}</b><br><span class="mudo pequeno">${esc(fmtTel(w.telemovel))}</span></td>
+    <td class="pequeno">${esc((w.texto || w.aviso || "").slice(0, 140))}${(w.texto || "").length > 140 ? "…" : ""}</td><td class="acc">${w.wa && w.texto ? `<button class="btn verde" data-i="${i}">Abrir</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="4" class="mudo">Nada por enviar.</td></tr>`}</table></div>`;
+  $$("[data-i]").forEach((b) => b.onclick = () => dialogoWa(fila[Number(b.dataset.i)], whatsapp));
+}
+
+arranque();
+</script>
+</body>
+</html>

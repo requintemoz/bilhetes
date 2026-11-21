@@ -1,0 +1,10 @@
+{
+  "name": "Porta · Bilhetes CNB",
+  "short_name": "Porta CNB",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1e3a8a",
+  "lang": "pt",
+  "icons": [{ "src": "../icone.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
