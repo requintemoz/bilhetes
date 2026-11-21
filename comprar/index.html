@@ -3,14 +3,45 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Comprar bilhetes</title>
+<meta name="theme-color" content="#0f0d0a">
+<link rel="icon" href="../icone.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../comum.css">
 <style>
-  .capa{width:100%;border-radius:14px;max-height:280px;object-fit:cover}
+  /* tema da página de compra: preto e dourado champanhe */
+  :root{--azul:#7a5a1e;--azul-escuro:#3b2d12;--fundo:#0f0d0a;--borda:#e6dcc8;--texto:#1d1a15;--ouro:#d9b878;--ouro-claro:#f4e3bd;--creme:#fbf7ef;--serifa:"Playfair Display",Georgia,"Times New Roman",serif}
+  body{background:#0f0d0a radial-gradient(1200px 500px at 50% -120px,#2a2216 0,#0f0d0a 70%) no-repeat}
+  .contentor{max-width:640px;padding:0 16px 40px}
+  .heroi{text-align:center;color:var(--ouro-claro);padding:34px 6px 22px}
+  .heroi .casa{font-size:.72rem;letter-spacing:.28em;text-transform:uppercase;color:var(--ouro);margin:0 0 14px}
+  .heroi h1{font-family:var(--serifa);font-weight:500;font-size:clamp(2.3rem,10vw,3.6rem);line-height:1.02;margin:0 0 16px;background:linear-gradient(180deg,#fff7e2 0,#e9cf97 55%,#b8924c 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .heroi .dia{font-family:var(--serifa);font-style:italic;font-size:1.25rem;margin:0;color:#fff3d6}
+  .heroi .onde{margin:8px 0 0;color:#cdbf9f;font-size:.95rem}
+  .heroi .fio{width:64px;height:1px;background:var(--ouro);margin:18px auto 0;opacity:.7}
+  .capa{width:100%;border-radius:14px;max-height:420px;object-fit:cover;margin-bottom:6px;border:1px solid #3a3122}
+  .cartao{background:var(--creme);border:0;border-radius:16px;padding:20px 18px;margin:14px 0;box-shadow:0 1px 0 #ffffff14 inset}
+  .cartao h2{font-family:var(--serifa);font-weight:700;font-size:1.3rem;margin:0 0 12px;color:#2a2114}
+  .cartao h3{font-size:.78rem;letter-spacing:.16em;text-transform:uppercase;color:#8a6a2f;margin:18px 0 8px}
+  .sobre p{margin:0 0 12px}.sobre p:last-child{margin:0}.sobre p.intro{font-size:1.05rem}
+  .prog{list-style:none;margin:0 0 6px;padding:0}.prog li{display:grid;grid-template-columns:58px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--borda)}.prog li:last-child{border:0}
+  .prog time{font-family:var(--serifa);font-weight:700;color:#8a6a2f;font-variant-numeric:tabular-nums}
+  .inclui{list-style:none;margin:0 0 16px;padding:0;display:flex;flex-wrap:wrap;gap:8px}.inclui li{border:1px solid #d8c9a6;border-radius:999px;padding:6px 14px;font-size:.92rem;background:#fff}
+  .btn{background:#1d1a15;color:var(--ouro-claro);letter-spacing:.02em}.btn.sec{background:#fff;color:var(--texto);border:1px solid var(--borda)}
+  .etiqueta{background:#f1e6cc;color:#5c4416}
+  input,select,textarea{border-color:#d8ccb4}input:focus,select:focus{outline:2px solid #b8924c;outline-offset:1px}
+  input[type=radio],input[type=checkbox]{accent-color:#8a6a2f}
+  .opcoes{display:grid;gap:10px}
+  .opcao{display:grid;grid-template-columns:22px 1fr;gap:12px;align-items:start;border:2px solid var(--borda);border-radius:14px;padding:14px;cursor:pointer;margin:0;background:#fff;font-weight:400;color:var(--texto);font-size:1rem}
+  .opcao input{width:20px;height:20px;min-height:0;margin-top:3px}.opcao b{display:block;font-size:1.05rem}.opcao span{color:#5f574a;font-size:.92rem}
+  .opcao:has(input:checked){border-color:#b8924c;background:#fdf6e6}
+  .total{display:flex;justify-content:space-between;align-items:baseline;border-top:2px solid #2a2114;margin-top:14px;padding-top:12px}.total b:last-child{font-family:var(--serifa);font-size:1.5rem}
+  .rodape{color:#8f866f;text-align:center;font-size:.85rem;margin-top:22px}.rodape a{color:var(--ouro)}
   .tipo{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--borda)}
   .tipo:last-child{border:0}.qtd{display:flex;align-items:center;gap:6px}.qtd button{width:40px;height:40px;border-radius:10px;border:1px solid var(--borda);background:#fff;font-size:1.2rem}.qtd span{min-width:24px;text-align:center;font-weight:700}
-  .sobe{font-size:.8rem;color:#b45309}
+  .sobe{font-size:.82rem;color:#9a5b0c}
   .termos{max-height:200px;overflow:auto;background:#fafafa;border:1px solid var(--borda);border-radius:10px;padding:4px 14px;font-size:.9rem}
-  .pag{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pag label{border:2px solid var(--borda);border-radius:12px;padding:12px;cursor:pointer;display:flex;gap:8px;align-items:center;margin:0}.pag input{width:auto;min-height:0}.pag label:has(input:checked){border-color:var(--azul);background:#eef2ff}
+  .pag{display:grid;grid-template-columns:1fr 1fr;gap:10px}.pag label{border:2px solid var(--borda);border-radius:12px;padding:12px;cursor:pointer;display:flex;gap:8px;align-items:center;margin:0}.pag input{width:auto;min-height:0}.pag label:has(input:checked){border-color:#b8924c;background:#fdf6e6}
   .faq details{border-bottom:1px solid var(--borda);padding:8px 0}
   .idade{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 0 8px 12px;border-left:3px solid var(--borda)}
   .idade label{margin:0;font-weight:500}.idade select{width:auto;min-width:160px}
@@ -24,16 +55,21 @@
 <div class="contentor">
   <div id="erro" class="erro oculto"></div>
   <div id="ev" class="oculto">
+    <header class="heroi">
+      <p class="casa" id="org"></p>
+      <h1 id="nome"></h1>
+      <p class="dia" id="quando"></p>
+      <p class="onde"><span id="horas"></span><br><span id="local"></span></p>
+      <div class="fio"></div>
+    </header>
     <img id="capa" class="capa oculto" alt="">
-    <h1 id="nome"></h1>
-    <p><b id="quando"></b> · <span id="local"></span><br><span class="mudo pequeno" id="org"></span></p>
-    <p id="descricao"></p>
+    <div class="cartao sobre oculto" id="descricao"></div>
 
     <div class="cartao" id="passo1">
       <h2>1. Bilhetes</h2>
       <div id="tipos"></div>
       <p class="linha"><input id="promo" placeholder="Código promocional (opcional)" style="flex:1"></p>
-      <p class="linha" style="justify-content:space-between"><b>Total</b><b id="total">0 MT</b></p>
+      <p class="total"><b>Total</b><b id="total">0 MT</b></p>
     </div>
 
     <div class="cartao" id="passo2">
@@ -45,11 +81,10 @@
     </div>
 
     <div class="cartao" id="passo3">
-      <h2>3. Pagamento</h2>
-      <div class="pag" id="meios">
-        <label><input type="radio" name="meio" value="mpesa" checked> M-Pesa</label>
-      </div>
-      <p class="mudo pequeno" id="pagNota">Receberá o pedido de pagamento no telemóvel; escreva o PIN só na aplicação da operadora.</p>
+      <h2>3. Reservar ou pagar já</h2>
+      <div class="opcoes" id="meios"></div>
+      <div id="pagExtra"></div>
+      <p class="mudo pequeno" id="pagNota"></p>
     </div>
 
     <div class="cartao" id="passo4">
@@ -59,19 +94,20 @@
       <div class="cx" style="margin-top:12px"><input type="checkbox" id="cTermos"><label for="cTermos" style="margin:0;font-weight:500">Li e aceito os Termos e Condições e a Política de Privacidade <b>(obrigatório)</b></label></div>
       <div class="cx"><input type="checkbox" id="cWa"><label for="cWa" style="margin:0;font-weight:500">Quero receber novidades sobre eventos por WhatsApp (opcional)</label></div>
       <div class="cx"><input type="checkbox" id="cSms"><label for="cSms" style="margin:0;font-weight:500">Quero receber por SMS (opcional)</label></div>
-      <p><button class="btn grande" id="btnComprar">Reservar e pagar</button></p>
+      <p><button class="btn grande" id="btnComprar">Reservar</button></p>
       <p id="erroForm" class="erro oculto"></p>
     </div>
 
     <div class="cartao oculto" id="pagamento"></div>
 
     <div class="cartao faq oculto" id="faq"><h2>Perguntas frequentes</h2><div id="faqLista"></div></div>
+    <p class="rodape" id="rodape"></p>
   </div>
 </div>
 <script src="../config.js"></script>
 <script type="module">
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { C, $, $$, esc, data, mt, md, param, mostrarErro, telemovelValido } from "../comum.js";
+import { C, $, $$, esc, data, hora, mt, md, param, mostrarErro, telemovelValido } from "../comum.js";
 const sb = createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
 const slug = param("e") || "";
 let ev, qtds = {}, cotT = null, cotN = 0;
@@ -89,12 +125,26 @@ const precoEscalao = (base, esc, n) => { let pr = Number(base); for (const e of 
 const pessoas = () => Object.values(qtds).reduce((s, q) => s + (q || 0), 0) + semTipo.length + idades.filter((a) => a == null).length;
 const textoEscaloes = (escaloes, base) => { const e = (escaloes || []).slice().sort((a, b) => a.min - b.min); if (!e.length) return "";
   return "Em grupo: " + [`até ${e[0].min - 1}, ${mt(base)}`, ...e.map((x, i) => `${x.min}${e[i + 1] ? " a " + (e[i + 1].min - 1) : " ou mais"}, ${mt(x.preco)}`)].join("; ") + " por pessoa"; };
+// Descrição do evento em blocos: parágrafos separados por uma linha em branco; um bloco que começa por "Título:" e segue com
+// linhas "19:30 texto" vira programa; com linhas "- texto" vira lista
+function htmlDescricao(t) {
+  return String(t).replace(/\r/g, "").split(/\n\s*\n/).map((b, i) => { const ls = b.split("\n").map((x) => x.trim()).filter(Boolean); if (!ls.length) return "";
+    const tit = ls.length > 1 && /:$/.test(ls[0]) ? ls[0].slice(0, -1) : null, resto = tit ? ls.slice(1) : ls;
+    if (tit && resto.every((x) => /^\d{1,2}[:h]\d{2}\s+\S/.test(x))) return `<h3>${esc(tit)}</h3><ul class="prog">${resto.map((x) => { const m = x.match(/^(\d{1,2}[:h]\d{2})\s+(.*)$/); return `<li><time>${esc(m[1])}</time><span>${esc(m[2])}</span></li>`; }).join("")}</ul>`;
+    if (tit && resto.every((x) => /^[-•]\s+/.test(x))) return `<h3>${esc(tit)}</h3><ul class="inclui">${resto.map((x) => `<li>${esc(x.replace(/^[-•]\s+/, ""))}</li>`).join("")}</ul>`;
+    return `<p${i === 0 ? ' class="intro"' : ""}>${ls.map(esc).join("<br>")}</p>`; }).join("");
+}
 async function carregar() {
   const { data: e, error } = await sb.rpc("fn_evento_publico", { p_slug: slug });
   if (error || !e) { mostrarErro($("#erro"), "Evento não encontrado ou sem venda aberta."); return; }
-  ev = e; document.title = `Bilhetes · ${e.nome}`;
-  $("#nome").textContent = e.nome; $("#quando").textContent = data(e.inicio_em); $("#local").textContent = e.local; $("#org").textContent = `Organização: ${e.organizacao?.nome || ""} ${e.idade_minima > 0 ? ` · Entrada só para maiores de ${e.idade_minima}` : ""}`;
-  $("#descricao").textContent = e.descricao || ""; if (e.imagem_url) { $("#capa").src = e.imagem_url; $("#capa").classList.remove("oculto"); }
+  ev = e; document.title = `${e.nome} | Bilhetes`;
+  const dia = data(e.portas_em || e.inicio_em, { dateStyle: "full", timeStyle: undefined });
+  $("#nome").textContent = e.nome; $("#quando").textContent = dia.charAt(0).toUpperCase() + dia.slice(1); $("#local").textContent = e.local;
+  $("#horas").textContent = (e.portas_em && e.portas_em !== e.inicio_em ? `Portas às ${hora(e.portas_em)}, início às ${hora(e.inicio_em)}` : `Às ${hora(e.inicio_em)}`) + (e.idade_minima > 0 ? `. Maiores de ${e.idade_minima} anos` : "");
+  $("#org").textContent = e.organizacao?.nome || "";
+  $("#rodape").innerHTML = `${esc(e.organizacao?.nome || "")}${e.organizacao?.telefone ? ` · Informações: <a href="tel:+258${esc(String(e.organizacao.telefone).replace(/\D/g, "").slice(-9))}">${esc(e.organizacao.telefone)}</a>` : ""}`;
+  if (e.descricao) { $("#descricao").innerHTML = htmlDescricao(e.descricao); $("#descricao").classList.remove("oculto"); }
+  if (e.imagem_url) { $("#capa").src = e.imagem_url; $("#capa").classList.remove("oculto"); }
   $("#termosTitulo").textContent = e.termos?.titulo || "Termos e Condições"; $("#termosTexto").innerHTML = md(e.termos?.texto_md);
   $("#privTitulo").textContent = e.privacidade?.titulo || "Política de Privacidade"; $("#privTexto").innerHTML = md(e.privacidade?.texto_md);
   if (e.faq?.length) { $("#faq").classList.remove("oculto"); $("#faqLista").innerHTML = e.faq.map((f) => `<details><summary>${esc(f.pergunta)}</summary><p>${esc(f.resposta)}</p></details>`).join(""); }
@@ -103,23 +153,51 @@ async function carregar() {
 }
 // ---------- pagamento com comprovativo (transferência bancária; M-Pesa sem ligação à operadora)
 function desenharMeios() {
-  const pm = ev.pagamento; if (!pm) return; // base de dados ainda sem a actualização: mantém o pagamento antigo
+  const pm = ev.pagamento; if (!pm) { $("#meios").innerHTML = `<label class="opcao"><input type="radio" name="meio" value="mpesa" checked><div><b>M-Pesa</b></div></label>`; return; } // base de dados antiga
   const ms = pm.metodos || [];
   if (!ms.length) {
     $("#meios").innerHTML = ""; $("#pagNota").className = "aviso";
-    $("#pagNota").textContent = `De momento não é possível pagar online${pm.transferencia_fechada ? ` (a transferência bancária fecha ${pm.fecho_transferencia_horas} horas antes do evento)` : ""}. Para reservar, contacte-nos${ev.organizacao?.telefone ? " pelo " + ev.organizacao.telefone : ""}.`;
+    $("#pagNota").textContent = `De momento não é possível reservar online${pm.transferencia_fechada ? ` (as reservas online fecham ${pm.fecho_transferencia_horas} horas antes do evento)` : ""}. Contacte-nos${ev.organizacao?.telefone ? " pelo " + ev.organizacao.telefone : ""} ou passe pelo nosso balcão.`;
     $("#btnComprar").disabled = true; return;
   }
-  const haJa = ms.some((m) => m.modo === "imediato");
-  const rotulo = (m) => m.modo === "imediato" ? "M-Pesa: pagar já" : m.meio === "mpesa" && haJa ? "M-Pesa: pagar e enviar comprovativo" : m.nome;
-  $("#meios").innerHTML = ms.map((m, i) => `<label><input type="radio" name="meio" value="${esc(m.id || m.meio)}" ${i === 0 ? "checked" : ""}> ${esc(rotulo(m))}</label>`).join("");
-  const nota = () => { const m = metodoEscolhido();
-    $("#pagNota").textContent = m?.modo === "imediato"
-      ? "Ao carregar em Pagar, recebe no telemóvel indicado acima (Vodacom 84 ou 85) um pedido do M-Pesa. Escreva o PIN só no menu do M-Pesa. O bilhete chega logo a seguir, por WhatsApp e nesta página."
-      : `Depois de reservar, mostramos os dados para pagar e pode enviar o comprovativo (fotografia ou PDF) nesta página. O bilhete é enviado por WhatsApp depois de confirmarmos a entrada do valor; este processo pode demorar até ${pm.prazo_confirmacao || "48 horas"}.${pm.transferencia_fechada ? ` A transferência bancária já não está disponível: fecha ${pm.fecho_transferencia_horas} horas antes do evento.` : ""}`;
-    $("#btnComprar").textContent = m?.modo === "imediato" ? "Pagar" : "Reservar"; };
-  $$("#meios input").forEach((x) => x.onchange = nota); nota();
+  const prazo = pm.prazo_confirmacao || "48 horas";
+  const txt = (m) => m.modo === "imediato" ? ["Pagar já com M-Pesa", "Recebe o pedido no telemóvel, confirma com o PIN e o bilhete chega logo a seguir."]
+    : m.modo === "reserva" ? ["Reservar e pagar mais tarde", "Guardamos os seus lugares. Paga por transferência ou no nosso balcão, dentro do prazo indicado."]
+    : m.meio === "transferencia" ? ["Pagar já por transferência", "Faz a transferência agora e anexa o comprovativo."]
+    : [`Pagar já por ${m.nome}`, "Faz o pagamento agora e anexa o comprovativo."];
+  $("#meios").innerHTML = ms.map((m, i) => { const [a, b] = txt(m); return `<label class="opcao"><input type="radio" name="meio" value="${esc(m.id || m.meio)}" ${i === 0 ? "checked" : ""}><div><b>${esc(a)}</b><span>${esc(b)}</span></div></label>`; }).join("");
+  $$("#meios input").forEach((x) => x.onchange = actualizarPag); actualizarPag();
 }
+// lote que termina primeiro entre os bilhetes escolhidos (ou entre todos, se ainda não escolheu)
+function fimDoLote() {
+  const ab = ev.precos.filter((p) => p.venda_aberta && p.lote_termina_em && Number(p.preco) > 0); const esc2 = ab.filter((p) => (qtds[p.tipo_bilhete_id] || 0) > 0);
+  const c = (esc2.length ? esc2 : ab).slice().sort((a, b) => new Date(a.lote_termina_em) - new Date(b.lote_termina_em))[0]; return c || null;
+}
+function actualizarPag() {
+  const pm = ev.pagamento, m = metodoEscolhido(), x = $("#pagExtra"), nota = $("#pagNota"); if (!pm || !m || !x) return;
+  const prazo = pm.prazo_confirmacao || "48 horas"; const tot = totalActual;
+  if (m.modo === "reserva") {
+    const l = fimDoLote(); const fecho = new Date(new Date(ev.inicio_em) - (pm.fecho_transferencia_horas ?? 72) * 3600e3);
+    const ate = l && new Date(l.lote_termina_em) < fecho ? l.lote_termina_em : null;
+    x.innerHTML = ate
+      ? `<p class="aviso"><b>O preço de hoje só vale para pagamentos feitos até ${esc(data(ate))}.</b> Guardamos a sua reserva até essa data. Se o pagamento não chegar até lá, a reserva é cancelada${l.proximo_preco ? ` e o preço passa para ${mt(l.proximo_preco)}${modoIdades ? " por adulto" : ""}` : " e passa a valer o preço seguinte"}.</p>`
+      : `<p class="aviso">Guardamos a sua reserva durante ${pm.prazo_reserva_dias ?? 7} dias${new Date(Date.now() + (pm.prazo_reserva_dias ?? 7) * 864e5) > fecho ? `, no máximo até ${esc(data(fecho.toISOString()))}` : ""}. Se o pagamento não chegar até lá, a reserva é cancelada.</p>`;
+    nota.textContent = "Depois de reservar, mostramos os dados para pagar e a ligação para enviar o comprovativo quando fizer a transferência. Também pode pagar no balcão do restaurante.";
+    $("#btnComprar").textContent = "Reservar";
+  } else if (m.modo === "imediato") {
+    x.innerHTML = ""; nota.textContent = "Ao carregar em Pagar, recebe no telemóvel indicado acima (Vodacom 84 ou 85) um pedido do M-Pesa. Escreva o PIN só no menu do M-Pesa.";
+    $("#btnComprar").textContent = "Pagar";
+  } else {
+    const f = $("#fPago")?.files?.[0]; // mantém o ficheiro já escolhido
+    if (!$("#fPago")) x.innerHTML = `<div id="pagDados"></div><label for="fPago">Comprovativo do pagamento (fotografia ou PDF, até 5 MB)</label><input type="file" id="fPago" accept="image/*,application/pdf">`;
+    $("#pagDados").innerHTML = m.banco || m.numero ? htmlDados(m, null, tot) : ""; ligarCopiar($("#pagDados"));
+    nota.textContent = `O bilhete é enviado por WhatsApp depois de confirmarmos a entrada do valor na nossa conta. Este processo pode demorar até ${prazo}.`;
+    $("#btnComprar").textContent = m.banco || m.numero ? "Enviar reserva e comprovativo" : "Reservar";
+    if (!(m.banco || m.numero)) { x.innerHTML = ""; nota.textContent = `Depois de reservar, mostramos os dados para pagar e pode enviar o comprovativo nesta página. O bilhete é enviado por WhatsApp depois de confirmarmos a entrada do valor (até ${prazo}).`; }
+  }
+  if (m.modo !== "comprovativo" && $("#fPago")) x.querySelector("#fPago")?.remove();
+}
+let totalActual = 0;
 const metodoEscolhido = () => { const v = $("input[name=meio]:checked")?.value; return (ev.pagamento?.metodos || []).find((m) => (m.id || m.meio) === v) || (v ? { id: v, meio: v, modo: null } : null); };
 const comprovativos = () => (ev.pagamento?.metodos || []).filter((m) => m.modo === "comprovativo");
 // Pagar já com M-Pesa: pede o pagamento à função "pagamentos"; se falhar, oferece pagar com comprovativo na mesma reserva
@@ -142,8 +220,8 @@ async function pagarJa(r) {
 function htmlDados(p, ref, total) {
   const linha = (rot, val, copiar) => val ? `<div class="dl"><span class="mudo">${rot}</span><b>${esc(val)}</b>${copiar ? `<button class="btn sec mini" data-copiar="${esc(val)}">Copiar</button>` : ""}</div>` : "";
   return `<div class="dados">` + (p.meio === "transferencia"
-    ? `<p><b>Transferência bancária</b></p>${linha("Banco", p.banco)}${linha("Em nome de", p.titular)}${linha("Conta", p.conta, true)}${linha("NIB", p.nib, true)}${linha("Valor", mt(total))}${linha("Descritivo", ref, true)}`
-    : `<p><b>${esc(p.nome)}</b></p>${linha("Número", p.numero, true)}${linha("Em nome de", p.titular)}${linha("Valor", mt(total))}${linha("Referência", ref, true)}`) + `</div>`;
+    ? `<p><b>Transferência bancária</b></p>${linha("Banco", p.banco)}${linha("Em nome de", p.titular)}${linha("Conta", p.conta, true)}${linha("NIB", p.nib, true)}${total ? linha("Valor", mt(total)) : ""}${linha("Descritivo", ref, true)}`
+    : `<p><b>${esc(p.nome)}</b></p>${linha("Número", p.numero, true)}${linha("Em nome de", p.titular)}${total ? linha("Valor", mt(total)) : ""}${linha("Referência", ref, true)}`) + `</div>`;
 }
 const ligarCopiar = (raiz) => raiz.querySelectorAll("[data-copiar]").forEach((b) => b.onclick = () => { navigator.clipboard?.writeText(b.dataset.copiar); b.textContent = "Copiado"; setTimeout(() => b.textContent = "Copiar", 1500); });
 async function reduzir(f) { // fotografias grandes: reduz antes de enviar (poupa dados móveis)
@@ -151,11 +229,16 @@ async function reduzir(f) { // fotografias grandes: reduz antes de enviar (poupa
   try { const img = await createImageBitmap(f); const k = Math.min(1, 2000 / Math.max(img.width, img.height));
     const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
     const b = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.85)); return b && b.size < f.size ? new File([b], f.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : f; } catch { return f; } }
+const tipoFicheiro = (f) => f.type || (/\.pdf$/i.test(f.name) ? "application/pdf" : /\.png$/i.test(f.name) ? "image/png" : "image/jpeg");
+function erroFicheiro(f) { // devolve o motivo, ou null se o ficheiro serve (as fotografias grandes são reduzidas antes do envio)
+  if (!f) return "Escolha o ficheiro do comprovativo.";
+  if (!["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"].includes(tipoFicheiro(f))) return "Envie uma fotografia (JPG ou PNG) ou um PDF.";
+  if (f.size > 5 * 1024 * 1024 && !/^image\/(jpeg|png|webp)$/.test(tipoFicheiro(f))) return "O ficheiro tem mais de 5 MB. Envie uma fotografia ou um PDF mais pequeno.";
+  return null; }
 async function enviarComprovativo(token, f) {
-  if (!f) throw new Error("Escolha o ficheiro do comprovativo.");
+  if (erroFicheiro(f)) throw new Error(erroFicheiro(f));
   f = await reduzir(f);
-  const tipo = f.type || (/\.pdf$/i.test(f.name) ? "application/pdf" : /\.png$/i.test(f.name) ? "image/png" : "image/jpeg");
-  if (!["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"].includes(tipo)) throw new Error("Envie uma fotografia (JPG ou PNG) ou um PDF.");
+  const tipo = tipoFicheiro(f);
   if (f.size > 5 * 1024 * 1024) throw new Error("O ficheiro tem mais de 5 MB. Envie uma fotografia ou um PDF mais pequeno.");
   const ext = { "application/pdf": "pdf", "image/png": "png", "image/webp": "webp", "image/heic": "heic", "image/heif": "heif" }[tipo] || "jpg";
   const caminho = `${token}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -179,6 +262,26 @@ function mostrarPagamentoManual(r) {
     try { await enviarComprovativo(r.token_publico, $("#fComp").files[0]); msg.className = "ok"; msg.textContent = `Recebemos o seu comprovativo. Vamos confirmar a entrada do valor e enviamos o bilhete por WhatsApp (até ${prazo}).`; $("#fComp").value = ""; $("#btnComp").textContent = "Enviar outro ficheiro"; }
     catch (e) { mostrarErro(msg, e); $("#btnComp").textContent = "Enviar comprovativo"; }
     $("#btnComp").disabled = false; };
+}
+// Reserva para pagar mais tarde
+function mostrarReserva(r) {
+  const pag = $("#pagamento"); pag.classList.remove("oculto"); const lig = new URL(`../t/?o=${r.token_publico}`, location.href).href;
+  pag.innerHTML = `<h2>Reserva feita</h2><p>Total: <b>${mt(r.total)}</b>${Number(r.desconto) > 0 ? ` (desconto ${mt(r.desconto)})` : ""}. Os seus lugares ficam guardados até <b>${esc(data(r.expira_em))}</b>.</p>
+    <p class="aviso">${r.prazo_lote ? "<b>Este preço só vale para pagamentos feitos até essa data.</b> " : ""}Se o pagamento não chegar até lá, a reserva é cancelada${r.prazo_lote ? " e passa a valer o preço do período seguinte" : ""}.</p>
+    <h3>Como pagar</h3>
+    ${r.pagamento ? htmlDados(r.pagamento, r.referencia, r.total) : ""}
+    <p>Quando fizer a transferência, envie o comprovativo nesta ligação. Guarde-a:</p>
+    <p><a class="btn grande" href="${lig}">Pagar e enviar o comprovativo</a></p>
+    <p><button class="btn sec" id="btnLig" data-copiar="${esc(lig)}">Copiar a ligação</button></p>
+    <p class="mudo pequeno">Também pode pagar no balcão do ${esc(ev.organizacao?.nome || "restaurante")}, indicando o seu nome e telemóvel. O bilhete é enviado por WhatsApp depois de confirmado o pagamento.</p>`;
+  ligarCopiar(pag); $("#btnLig").onclick = () => { navigator.clipboard?.writeText(lig); $("#btnLig").textContent = "Ligação copiada"; };
+}
+// Pagou já e o comprovativo seguiu com a reserva
+function mostrarPagoEnviado(r) {
+  const pag = $("#pagamento"); pag.classList.remove("oculto"); const prazo = r.prazo_confirmacao || ev.pagamento?.prazo_confirmacao || "48 horas";
+  pag.innerHTML = `<h2>Recebemos a sua reserva e o comprovativo</h2><p>Total: <b>${mt(r.total)}</b>. Referência da reserva: <b>${esc(r.referencia)}</b>.</p>
+    <p class="ok">Vamos confirmar a entrada do valor na nossa conta e enviamos o bilhete por WhatsApp. Este processo pode demorar até ${esc(prazo)}.</p>
+    <p class="pequeno">Pode acompanhar a reserva nesta ligação (guarde-a): <a href="../t/?o=${r.token_publico}">a minha reserva</a></p>`;
 }
 const sobeTxt = (p) => p.proximo_preco && p.lote_termina_em ? `<div class="sobe">Sobe para ${mt(p.proximo_preco)} ${p.lote_termina_apos_qtd ? `ao esgotar ${p.lote_termina_apos_qtd - p.vendidos} bilhetes ou ` : ""}a ${data(p.lote_termina_em)}</div>` : "";
 function desenharTipos() {
@@ -245,10 +348,10 @@ function total() {
   const loc = ev.precos.filter((p) => (qtds[p.tipo_bilhete_id] || 0) > 0).map((p) => { const u = precoEscalao(p.preco, p.escaloes, p.conta_grupo ? grupo : 0);
     return { tipo_bilhete_id: p.tipo_bilhete_id, nome: p.nome, quantidade: qtds[p.tipo_bilhete_id], preco_unitario: u, subtotal: u * qtds[p.tipo_bilhete_id] }; });
   const s = loc.reduce((t, i) => t + i.subtotal, 0);
-  $("#total").textContent = mt(s); desenharLinhas(loc);
+  $("#total").textContent = mt(s); desenharLinhas(loc); totalActual = s; actualizarPag();
   clearTimeout(cotT); const n = ++cotN; const itens = loc.map((i) => ({ tipo_bilhete_id: i.tipo_bilhete_id, quantidade: i.quantidade }));
   if (itens.length) cotT = setTimeout(async () => { const { data: c } = await sb.rpc("fn_cotar_encomenda", { p_evento: ev.id, p_itens: itens, p_telemovel: null });
-    if (c && n === cotN) { $("#total").textContent = mt(c.total); desenharLinhas(c.itens); } }, 200);
+    if (c && n === cotN) { $("#total").textContent = mt(c.total); desenharLinhas(c.itens); totalActual = Number(c.total); actualizarPag(); } }, 200);
   return s; }
 
 $("#btnComprar").onclick = async () => {
@@ -268,14 +371,20 @@ $("#btnComprar").onclick = async () => {
   if (!$("#cTermos").checked) return mostrarErro(erro, "É necessário aceitar os termos.");
   const met = metodoEscolhido(); if (!met) return mostrarErro(erro, "Escolha a forma de pagamento.");
   if (met.modo === "imediato" && !/^(258)?8[45]\d{7}$/.test($("#cTel").value.replace(/\D/g, ""))) return mostrarErro(erro, "Para pagar já com M-Pesa, o telemóvel tem de ser Vodacom (84 ou 85). Corrija o número ou escolha outra forma de pagar.");
-  $("#btnComprar").disabled = true;
+  const pagaJa = met.modo === "comprovativo" && !!$("#fPago"); const fPago = pagaJa ? $("#fPago").files[0] : null;
+  if (pagaJa && erroFicheiro(fPago)) return mostrarErro(erro, fPago ? erroFicheiro(fPago) : "Anexe o comprovativo do pagamento. Se ainda não pagou, escolha \"Reservar e pagar mais tarde\".");
+  $("#btnComprar").disabled = true; const rotulo = $("#btnComprar").textContent; $("#btnComprar").textContent = "A enviar…";
   const meio = met.meio;
   const { data: r, error } = await sb.rpc("fn_criar_encomenda_online", { p: { evento_id: ev.id, cliente: { telemovel: $("#cTel").value, nome: $("#cNome").value.trim(), email: $("#cEmail").value.trim() },
     itens, observacoes, codigo_promo: $("#promo").value.trim() || null, aceita_termos: true, aceita_whatsapp: $("#cWa").checked, aceita_sms: $("#cSms").checked, meio_pagamento: meio, modo_pagamento: met.modo || undefined }, p_ua: navigator.userAgent.slice(0, 200) });
-  if (error) { mostrarErro(erro, error); $("#btnComprar").disabled = false; return; }
-  for (const id of ["passo1", "passo2", "passo3", "passo4"]) $("#" + id).classList.add("oculto");
-  scrollTo(0, 0);
-  if (r.comprovativo) return mostrarPagamentoManual(r);
+  if (error) { mostrarErro(erro, error); $("#btnComprar").disabled = false; $("#btnComprar").textContent = rotulo; return; }
+  let falhaEnvio = null;
+  if (fPago && r.comprovativo && !r.reserva) { try { await enviarComprovativo(r.token_publico, fPago); } catch (e) { falhaEnvio = e; } }
+  for (const id of ["passo1", "passo2", "passo3", "passo4", "descricao", "faq"]) $("#" + id).classList.add("oculto");
+  $("#pagamento").scrollIntoView({ block: "start" }); scrollTo(0, 0);
+  if (r.reserva) return mostrarReserva(r);
+  if (fPago && r.comprovativo && !falhaEnvio) return mostrarPagoEnviado(r);
+  if (r.comprovativo) { mostrarPagamentoManual(r); if (falhaEnvio) { mostrarErro($("#compMsg"), `A reserva ficou feita, mas o comprovativo não seguiu (${falhaEnvio.message || "erro"}). Envie-o de novo aqui.`); } return; }
   if (r.imediato) return pagarJa(r);
   // pagamento automático pela operadora (quando houver ligação à API)
   const pag = $("#pagamento"); pag.classList.remove("oculto");
