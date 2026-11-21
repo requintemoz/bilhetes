@@ -29,7 +29,7 @@
   <section id="login" class="cartao" style="max-width:420px;margin:30px auto">
     <h2>Entrar</h2>
     <p>Entre com o seu nome e o PIN que lhe foi dado.</p>
-    <p><a class="btn" id="btnPin" href="/menu-cnb/entrar.html">Entrar com nome e PIN</a></p>
+    <p><a class="btn" id="btnPin" href="../entrar/?para=promotor">Entrar com nome e PIN</a></p>
     <p id="loginMsg" class="oculto"></p>
   </section>
 
@@ -62,7 +62,7 @@ function dialogo(html, onOpen) { $("#dlgCorpo").innerHTML = html + `<p class="li
 function msgLogin(t, erro) { const m = $("#loginMsg"); m.className = erro ? "erro" : "ok"; m.textContent = t; }
 
 // ---------- sessão ----------
-$("#btnPin").href = new URL("/menu-cnb/entrar.html", location.origin).href;
+$("#btnPin").href = new URL("../entrar/?para=promotor", location.href).href;
 $("#btnSair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
 async function arranque() {
   const { data: { session } } = await sb.auth.getSession(); if (!session) return;

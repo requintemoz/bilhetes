@@ -29,7 +29,7 @@
   <section id="login" class="cartao" style="max-width:420px;margin:30px auto">
     <h2>Entrar</h2>
     <p>A equipa entra com o <b>nome e o PIN</b>, o mesmo do menu digital.</p>
-    <p><a class="btn" id="btnPin" href="/menu-cnb/entrar.html">Entrar com nome e PIN</a></p>
+    <p><a class="btn" id="btnPin" href="../entrar/?para=bilhetes">Entrar com nome e PIN</a></p>
     <details><summary class="mudo">Administração: entrar com email e palavra-passe</summary>
       <label>Email</label><input id="email" type="email" autocomplete="username">
       <label>Palavra-passe</label><input id="senha" type="password" autocomplete="current-password">
@@ -64,7 +64,7 @@ const podeVer = (p) => eu.perfil === "admin" || (PAGINAS[eu.perfil] || []).inclu
 
 // ---------- sessão ----------
 $("#btnEntrar").onclick = async () => { const { error } = await sb.auth.signInWithPassword({ email: $("#email").value.trim(), password: $("#senha").value }); if (error) return msgLogin("Email ou palavra-passe incorrectos.", true); arranque(); };
-$("#btnPin").href = new URL("/menu-cnb/entrar.html", location.origin).href;
+$("#btnPin").href = new URL("../entrar/?para=bilhetes", location.href).href; // entrada da equipa no próprio site dos bilhetes
 $("#btnSair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
 function msgLogin(t, erro) { const m = $("#loginMsg"); m.className = erro ? "erro" : "ok"; m.textContent = t; }
 async function arranque() {

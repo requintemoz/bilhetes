@@ -1,6 +1,6 @@
 // Service worker: guarda a app de porta para abrir sem rede.
 // A página em si vem primeiro da rede (para receber actualizações) e da cópia guardada só sem rede.
-const CACHE = "porta-v2";
+const CACHE = "porta-v3";
 const FICHEIROS = ["./", "./index.html", "./manifest.webmanifest", "../comum.css", "../config.js", "https://esm.sh/@supabase/supabase-js@2", "https://esm.sh/jsqr@1.4.0"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(CACHE).then((c) => Promise.allSettled(FICHEIROS.map((f) => c.add(f))))); self.skipWaiting(); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k))))); self.clients.claim(); });
