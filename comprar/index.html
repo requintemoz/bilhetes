@@ -27,6 +27,8 @@
   .prog{list-style:none;margin:0 0 6px;padding:0}.prog li{display:grid;grid-template-columns:58px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--borda)}.prog li:last-child{border:0}
   .prog time{font-family:var(--serifa);font-weight:700;color:#8a6a2f;font-variant-numeric:tabular-nums}
   .inclui{list-style:none;margin:0 0 16px;padding:0;display:flex;flex-wrap:wrap;gap:8px}.inclui li{border:1px solid #d8c9a6;border-radius:999px;padding:6px 14px;font-size:.92rem;background:#fff}
+  .lista{margin:0 0 16px;padding:0;list-style:none}.lista li{padding:7px 0 7px 18px;border-bottom:1px solid var(--borda);position:relative}.lista li:last-child{border:0}.lista li::before{content:"";position:absolute;left:2px;top:16px;width:6px;height:6px;border-radius:50%;background:#b8924c}
+  .tipo.mesa{display:block}.tipo.mesa select{margin-top:10px;width:100%}
   .btn{background:#1d1a15;color:var(--ouro-claro);letter-spacing:.02em}.btn.sec{background:#fff;color:var(--texto);border:1px solid var(--borda)}
   .etiqueta{background:#f1e6cc;color:#5c4416}
   input,select,textarea{border-color:#d8ccb4}input:focus,select:focus{outline:2px solid #b8924c;outline-offset:1px}
@@ -131,7 +133,7 @@ function htmlDescricao(t) {
   return String(t).replace(/\r/g, "").split(/\n\s*\n/).map((b, i) => { const ls = b.split("\n").map((x) => x.trim()).filter(Boolean); if (!ls.length) return "";
     const tit = ls.length > 1 && /:$/.test(ls[0]) ? ls[0].slice(0, -1) : null, resto = tit ? ls.slice(1) : ls;
     if (tit && resto.every((x) => /^\d{1,2}[:h]\d{2}\s+\S/.test(x))) return `<h3>${esc(tit)}</h3><ul class="prog">${resto.map((x) => { const m = x.match(/^(\d{1,2}[:h]\d{2})\s+(.*)$/); return `<li><time>${esc(m[1])}</time><span>${esc(m[2])}</span></li>`; }).join("")}</ul>`;
-    if (tit && resto.every((x) => /^[-•]\s+/.test(x))) return `<h3>${esc(tit)}</h3><ul class="inclui">${resto.map((x) => `<li>${esc(x.replace(/^[-•]\s+/, ""))}</li>`).join("")}</ul>`;
+    if (tit && resto.every((x) => /^[-•]\s+/.test(x))) return `<h3>${esc(tit)}</h3><ul class="${resto.some((x) => x.length > 30) ? "lista" : "inclui"}">${resto.map((x) => `<li>${esc(x.replace(/^[-•]\s+/, ""))}</li>`).join("")}</ul>`;
     return `<p${i === 0 ? ' class="intro"' : ""}>${ls.map(esc).join("<br>")}</p>`; }).join("");
 }
 async function carregar() {
@@ -293,11 +295,15 @@ function desenharTipos() {
   $("#tipos").innerHTML = (modoIdades ? htmlIdades() : "") + (modoIdades && outros.length ? "<h3>Outros bilhetes</h3>" : "") + outros.map((p) => {
     const sobe = sobeTxt(p);
     const esg = p.disponivel <= 0;
+    // tipos vendidos em conjuntos (mesas de 4, 6, 8 ou 10): escolhe-se a mesa; cada pessoa da mesa recebe o seu bilhete
+    if (p.multiplos?.length) { const ms = p.multiplos.filter((n) => n <= p.disponivel && n <= MAX_ONLINE);
+      return `<div class="tipo mesa"><b>${esc(p.nome)}</b><div class="mudo pequeno">O preço é por mesa. Cada pessoa da mesa recebe o seu bilhete.</div>${sobe}${esg || !ms.length ? "<div class='sobe'>Esgotado</div>" : `<select data-mesa="${p.tipo_bilhete_id}" aria-label="${esc(p.nome)}"><option value="0">Sem mesa</option>${ms.map((n) => `<option value="${n}" ${qtds[p.tipo_bilhete_id] === n ? "selected" : ""}>Mesa de ${n} pessoas: ${mt(n * Number(p.preco))}</option>`).join("")}</select>`}</div>`; }
     return `<div class="tipo"><div><b>${esc(p.nome)}</b> <span class="etiqueta">${mt(p.preco)}</span>${p.lote ? ` <span class="mudo pequeno">${esc(p.lote)}</span>` : ""}${p.escaloes?.length ? `<div class="sobe">${textoEscaloes(p.escaloes, p.preco)}</div>` : ""}${sobe}${esg ? "<div class='sobe'>Esgotado</div>" : ""}</div>
       <div class="qtd"><button data-t="${p.tipo_bilhete_id}" data-d="-1" ${esg ? "disabled" : ""}>−</button><span id="q-${p.tipo_bilhete_id}">${qtds[p.tipo_bilhete_id] || 0}</span><button data-t="${p.tipo_bilhete_id}" data-d="1" ${esg ? "disabled" : ""}>+</button></div></div>`;
   }).join("");
   $$("#tipos button[data-t]").forEach((b) => b.onclick = () => { const t = b.dataset.t; const p = ev.precos.find((x) => x.tipo_bilhete_id === t); const d = Number(b.dataset.d);
     if (d > 0 && pessoas() >= MAX_ONLINE) return; qtds[t] = Math.max(0, Math.min(p.disponivel, MAX_ONLINE, (qtds[t] || 0) + d)); $("#q-" + t).textContent = qtds[t]; total(); });
+  $$("#tipos select[data-mesa]").forEach((x) => x.onchange = () => { qtds[x.dataset.mesa] = Number(x.value) || 0; total(); });
   if (modoIdades) ligarIdades(); else total();
 }
 function htmlIdades() {
