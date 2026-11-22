@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bilhetes CNB · Administração</title>
+<link rel="stylesheet" href="../comum.css">
+<style>
+  .contentor{max-width:1100px}
+  .mini{padding:3px 8px;min-height:0;font-size:.8rem;width:auto;margin:2px 0}
+  nav{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0 14px}nav a{padding:8px 12px;border-radius:10px;text-decoration:none;color:#374151;font-weight:600;font-size:.92rem}nav a.act{background:#fff;border:1px solid var(--borda);color:var(--azul-escuro)}
+  .grelha{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  .kpi b{display:block;font-size:1.6rem}
+  .tabs{display:flex;gap:6px;margin:8px 0}.tabs button{background:#fff;border:1px solid var(--borda);border-radius:999px;padding:6px 12px;font-weight:600}.tabs button.act{background:var(--azul);color:#fff;border-color:var(--azul)}
+  .estado-paga{color:var(--verde);font-weight:700}.estado-reservada{color:var(--amarelo);font-weight:700}.estado-cancelada,.estado-reembolsada,.estado-anulado{color:var(--vermelho)}
+  dialog{border:0;border-radius:16px;padding:0;width:min(640px,96vw)}dialog .cartao{margin:0;border:0}dialog::backdrop{background:rgba(0,0,0,.4)}
+  .acc{display:flex;gap:6px;flex-wrap:wrap}.acc .btn{padding:6px 10px;min-height:0;font-size:.85rem;width:auto}
+  .trocar{overflow:auto}
+  .badge{display:inline-block;min-width:20px;padding:1px 7px;border-radius:999px;background:var(--verde);color:#fff;font-size:.75rem;text-align:center;margin-left:2px}
+  .aviso-wa{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:10px 14px;margin-bottom:12px}
+  textarea#waTexto{font-family:inherit;font-size:.95rem}
+  details summary{cursor:pointer;margin:10px 0}
+  @media(max-width:700px){table{font-size:.85rem}}
+</style>
+</head>
+<body>
+<div class="contentor">
+  <div class="topo"><div><b>Bilhetes CNB</b> <span class="mudo" id="quem"></span></div><div class="linha"><button class="btn sec oculto" id="btnSair">Sair</button></div></div>
+
+  <section id="login" class="cartao" style="max-width:420px;margin:30px auto">
+    <h2>Entrar</h2>
+    <p>A equipa entra com o <b>nome e o PIN</b>, o mesmo do menu digital.</p>
+    <p><a class="btn" id="btnPin" href="../entrar/?para=bilhetes">Entrar com nome e PIN</a></p>
+    <details><summary class="mudo">Administração: entrar com email e palavra-passe</summary>
+      <label>Email</label><input id="email" type="email" autocomplete="username">
+      <label>Palavra-passe</label><input id="senha" type="password" autocomplete="current-password">
+      <p><button class="btn sec" id="btnEntrar">Entrar</button></p>
+    </details>
+    <p id="loginMsg" class="oculto"></p>
+  </section>
+
+  <nav id="nav" class="oculto">
+    <a href="#painel">Painel</a><a href="#vendas">Vendas <span id="badgeComp" class="badge oculto" title="Comprovativos por verificar"></span></a><a href="#whatsapp">WhatsApp <span id="badgeWa" class="badge oculto"></span></a><a href="#convites">Convites</a><a href="#clientes">Clientes</a><a href="#eventos">Eventos</a><a href="#campanhas">Campanhas</a><a href="#mensagens">Mensagens</a><a href="#relatorios">Relatórios</a><a href="#pulseiras">Pulseiras</a><a href="#definicoes">Definições</a>
+  </nav>
+  <div id="app"></div>
+</div>
+<dialog id="dlg"><div class="cartao" id="dlgCorpo"></div></dialog>
+
+<script src="../config.js"></script>
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { C, $, $$, esc, data, dataCurta, hora, mt, md, mostrarErro } from "../comum.js";
+const sb = createClient(C.SUPABASE_URL, C.SUPABASE_ANON_KEY);
+let eu = null; // ficha de staff
+let MODO_WA = "manual"; // manual = a equipa envia pelo WhatsApp da Requinte; automatico = API
+const app = $("#app");
+// páginas por perfil (o servidor verifica sempre as permissões; isto só simplifica o menu)
+const PAGINAS = {
+  admin: null,
+  vendedor: ["painel", "vendas", "whatsapp", "convites", "clientes", "pulseiras"],
+  comunicacao: ["painel", "whatsapp", "clientes", "campanhas", "mensagens", "relatorios"],
+  porta: ["painel", "vendas", "pulseiras"],
+};
+const podeVer = (p) => eu.perfil === "admin" || (PAGINAS[eu.perfil] || []).includes(p);
+
+// ---------- sessão ----------
+$("#btnEntrar").onclick = async () => { const { error } = await sb.auth.signInWithPassword({ email: $("#email").value.trim(), password: $("#senha").value }); if (error) return msgLogin("Email ou palavra-passe incorrectos.", true); arranque(); };
+$("#btnPin").href = new URL("../entrar/?para=bilhetes", location.href).href; // entrada da equipa no próprio site dos bilhetes
+$("#btnSair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+function msgLogin(t, erro) { const m = $("#loginMsg"); m.className = erro ? "erro" : "ok"; m.textContent = t; }
+async function arranque() {
+  const { data: { session } } = await sb.auth.getSession(); if (!session) return;
+  const { data: s } = await sb.rpc("fn_staff_actual");
+  if (!s || !s.id || !s.perfil) { $("#btnSair").classList.remove("oculto"); return msgLogin(s?.id ? `${s.nome}, a sua conta ainda não tem acesso aos bilhetes. Fale com a gerência.` : "Esta conta não está na equipa. Fale com a gerência.", true); }
+  if (s.perfil === "promotor") { location.replace("../promotor/"); return; }
+  eu = s; $("#login").classList.add("oculto"); $("#nav").classList.remove("oculto"); $("#btnSair").classList.remove("oculto"); $("#quem").textContent = `· ${s.nome} (${s.perfil})`;
+  $$("#nav a").forEach((a) => a.classList.toggle("oculto", !podeVer(a.getAttribute("href").slice(1))));
+  try { const d = await q(sb.from("definicoes").select("valor").eq("chave", "whatsapp").maybeSingle()); MODO_WA = d?.valor?.modo || "manual"; } catch {}
+  actualizarBadge(); setInterval(actualizarBadge, 60000);
+  if (!location.hash) location.hash = "#painel"; rota();
+}
+window.addEventListener("hashchange", rota);
+async function rota() { if (!eu) return; const r = location.hash.replace("#", "").split("/"); $$("#nav a").forEach((a) => a.classList.toggle("act", a.getAttribute("href") === "#" + r[0]));
+  app.innerHTML = "<p class='mudo'>A carregar…</p>";
+  const paginas = { painel, eventos, vendas, whatsapp, convites, clientes, campanhas, mensagens, relatorios, pulseiras, definicoes };
+  const f = paginas[r[0]] && podeVer(r[0]) ? paginas[r[0]] : painel;
+  try { await f(r.slice(1)); }
+  catch (e) { app.innerHTML = `<div class="erro">${esc(e.message || e)}</div>`; } }
+
+// ---------- WhatsApp (envio manual pelo WhatsApp da equipa) ----------
+// preço por pessoa conforme o tamanho do grupo (escalões do lote em vigor)
+const textoEscaloes = (escaloes, base) => { const e = (escaloes || []).slice().sort((a, b) => a.min - b.min); if (!e.length) return "";
+  return "Em grupo: " + [`até ${e[0].min - 1}, ${mt(base)}`, ...e.map((x, i) => `${x.min}${e[i + 1] ? " a " + (e[i + 1].min - 1) : " ou mais"}, ${mt(x.preco)}`)].join("; ") + " por pessoa"; };
+const fmtTel = (t) => String(t || "").replace(/^\+258(\d{2})(\d{3})(\d{4})$/, "+258 $1 $2 $3");
+const urlWa = (numero, texto) => `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+async function actualizarBadge() { actualizarBadgeComp(); try { const n = await rpc("fn_whatsapp_contar"); const b = $("#badgeWa"); b.textContent = n; b.classList.toggle("oculto", !n); return n; } catch { return 0; } }
+// comprovativos de transferência (ou M-Pesa) enviados pelos clientes e ainda por verificar
+const trataPagamentos = () => ["admin", "vendedor"].includes(eu.perfil);
+async function actualizarBadgeComp() { if (!trataPagamentos()) return 0; try { const k = await q(sb.from("comprovativos").select("id").eq("estado", "pendente")); const b = $("#badgeComp"); b.textContent = k.length; b.classList.toggle("oculto", !k.length); return k.length; } catch { return 0; } }
+async function verComprovativo(caminho) {
+  const w = window.open("", "_blank"); // abre já, para o navegador não bloquear a janela
+  try { const { data, error } = await sb.storage.from("comprovativos").createSignedUrl(caminho, 600); if (error) throw error; if (w) w.location.href = data.signedUrl; else location.href = data.signedUrl; }
+  catch (e) { w?.close(); alert("Não foi possível abrir o comprovativo: " + (e.message || e)); } }
+const ESTADO_COMP = { pendente: "por verificar", aceite: "aceite", recusado: "recusado" };
+const htmlComps = (e) => (e.comprovativos || []).slice().sort((a, b) => a.criado_em < b.criado_em ? -1 : 1).map((k) => `<div class="pequeno"><button class="btn sec mini" data-vercomp="${esc(k.caminho)}">Ver comprovativo</button> <span class="${k.estado === "pendente" ? "estado-reservada" : "mudo"}">${ESTADO_COMP[k.estado] || k.estado}</span> <span class="mudo">${dataCurta(k.criado_em)}${k.motivo ? ": " + esc(k.motivo) : ""}</span>${k.estado === "pendente" && e.estado === "reservada" ? ` <button class="btn sec mini" data-recusar="${k.id}">Recusar</button>` : ""}</div>`).join("");
+async function abrirWhatsapp(encId, clienteId, aoFechar) {
+  try { dialogoWa(await rpc("fn_whatsapp_texto", { p_encomenda: encId, p_cliente: clienteId || null }), aoFechar); }
+  catch (e) { alert(e.message); }
+}
+function dialogoWa(w, aoFechar) {
+  if (!w.wa || !w.texto) { dialogo(`<h2>WhatsApp</h2><p>${!w.wa ? `${esc(w.nome || "Este cliente")} não tem telemóvel registado: entregue o bilhete impresso.` : esc(w.aviso || "Nada para enviar.")}</p>`); return; }
+  dialogo(`<h2>Enviar por WhatsApp</h2><p>Para <b>${esc(w.nome)}</b> · ${esc(fmtTel(w.telemovel))}${w.evento ? ` · <span class="mudo">${esc(w.evento)}</span>` : ""}</p>
+    ${w.aviso ? `<div class="erro">${esc(w.aviso)}</div>` : ""}
+    <label for="waTexto">Mensagem (pode ajustar antes de abrir)</label><textarea id="waTexto" rows="10">${esc(w.texto)}</textarea>
+    <p class="mudo pequeno">Abre o WhatsApp deste aparelho com a mensagem já escrita. Confirme que está no WhatsApp da Requinte e carregue em enviar.</p>
+    <p class="linha"><a class="btn verde" id="waAbrir" target="_blank" rel="noopener">Abrir no WhatsApp</a><button class="btn sec" id="waCopiar">Copiar texto</button>${w.ids?.length ? `<button class="btn sec" id="waIgnorar">Não enviar</button>` : ""}</p>`, () => {
+    const texto = () => $("#waTexto").value.trim();
+    const actualizar = () => { $("#waAbrir").href = urlWa(w.wa, texto()); }; actualizar(); $("#waTexto").oninput = actualizar;
+    $("#waAbrir").onclick = () => { // deixa o navegador abrir o WhatsApp; regista em paralelo
+      rpc("fn_whatsapp_marcar", { p_ids: w.ids || [], p_enviada: true, p_encomenda: w.encomenda_id || null, p_cliente: w.cliente_id || null, p_texto: texto() })
+        .then(() => actualizarBadge()).catch((e) => alert("A mensagem abriu, mas não ficou registada: " + e.message));
+      setTimeout(() => { $("#dlg").close(); aoFechar?.(); }, 300); };
+    $("#waCopiar").onclick = async () => { try { await navigator.clipboard.writeText(texto()); $("#waCopiar").textContent = "Copiado"; } catch { $("#waTexto").select(); } };
+    $("#waIgnorar") && ($("#waIgnorar").onclick = async () => { if (!confirm("Marcar como não enviada? Sai da lista do WhatsApp.")) return; await rpc("fn_whatsapp_marcar", { p_ids: w.ids, p_enviada: false }); actualizarBadge(); $("#dlg").close(); aoFechar?.(); });
+  });
+}
+// depois de uma venda, pagamento, convite, reemissão ou transferência
+function depoisDeAccao(encId, clienteId, aoFechar) {
+  if (MODO_WA === "automatico") { actualizarBadge(); aoFechar?.(); return; }
+  abrirWhatsapp(encId, clienteId, aoFechar); actualizarBadge();
+}
+async function whatsapp() {
+  const fila = await rpc("fn_whatsapp_fila"); actualizarBadge();
+  app.innerHTML = `<h1>WhatsApp por enviar</h1><p class="mudo">${MODO_WA === "automatico" ? "O envio automático está ligado. Aqui ficam só as mensagens que estavam na fila manual antes da mudança." : "Enquanto a API do WhatsApp não estiver activa, as mensagens saem pelo WhatsApp da Requinte: abra cada uma, confirme e carregue em enviar. A mensagem é escrita conforme o ponto em que a venda está (termos, pagamento ou bilhetes)."}</p>
+  <div class="cartao trocar"><table><tr><th>Desde</th><th>Para</th><th>Mensagem</th><th></th></tr>${fila.map((w, i) => `<tr><td class="pequeno">${data(w.desde)}</td><td><b>${esc(w.nome || "")}</b><br><span class="mudo pequeno">${esc(fmtTel(w.telemovel))}${w.evento ? " · " + esc(w.evento) : ""}</span></td>
+    <td class="pequeno">${esc((w.texto || w.aviso || "").slice(0, 150))}${(w.texto || "").length > 150 ? "…" : ""}</td><td class="acc">${w.wa && w.texto ? `<button class="btn verde" data-i="${i}">Abrir</button>` : ""}<button class="btn sec" data-ign="${i}">Não enviar</button></td></tr>`).join("") || `<tr><td colspan="4" class="mudo">Nada por enviar.</td></tr>`}</table></div>`;
+  $$("[data-i]").forEach((b) => b.onclick = () => dialogoWa(fila[Number(b.dataset.i)], whatsapp));
+  $$("[data-ign]").forEach((b) => b.onclick = async () => { const w = fila[Number(b.dataset.ign)]; if (!confirm(`Não enviar a mensagem para ${w.nome}?`)) return; await rpc("fn_whatsapp_marcar", { p_ids: w.ids, p_enviada: false }); whatsapp(); });
+}
+
+// ---------- utilitários ----------
+async function rpc(fn, args) { const { data, error } = await sb.rpc(fn, args); if (error) throw new Error(error.message); return data; }
+async function q(builder) { const { data, error } = await builder; if (error) throw new Error(error.message); return data; }
+function dialogo(html, onOpen) { $("#dlgCorpo").innerHTML = html + `<p class="linha" style="justify-content:flex-end"><button class="btn sec" id="dlgFechar">Fechar</button></p>`; $("#dlg").showModal(); $("#dlgFechar").onclick = () => $("#dlg").close(); onOpen?.(); }
+const v = (id) => $("#" + id)?.value?.trim();
+const opt = (lista, val, lab, sel) => lista.map((x) => `<option value="${x[val]}" ${sel == x[val] ? "selected" : ""}>${esc(lab(x))}</option>`).join("");
+const campo = (id, rot, tipo = "text", val = "", extra = "") => `<label>${rot}</label><input id="${id}" type="${tipo}" value="${esc(val)}" ${extra}>`;
+async function eventosLista() { return q(sb.from("eventos").select("id, nome, slug, inicio_em, estado, lotacao").order("inicio_em", { ascending: false })); }
+const isoLocal = (iso) => iso ? new Date(new Date(iso).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : "";
+const deLocal = (s) => s ? new Date(s).toISOString() : null;
+
+// ---------- painel ----------
+async function painel() {
+  const r = await q(sb.from("v_conciliacao_evento").select("*"));
+  const evs = await eventosLista(); const por = Object.fromEntries(r.map((x) => [x.evento_id, x]));
+  const nWa = podeVer("whatsapp") ? await actualizarBadge() : 0;
+  app.innerHTML = `<h1>Painel</h1>${nWa ? `<div class="aviso-wa"><span><b>${nWa}</b> ${nWa === 1 ? "mensagem" : "mensagens"} de WhatsApp por enviar</span><a class="btn verde" href="#whatsapp">Ver e enviar</a></div>` : ""}<div class="grelha">` + evs.filter((e) => e.estado !== "encerrado" && e.estado !== "cancelado").map((e) => { const c = por[e.id] || {}; return `<div class="cartao kpi"><div class="mudo">${dataCurta(e.inicio_em)} · <span class="etiqueta">${e.estado}</span></div><h3>${esc(e.nome)}</h3>
+    <div class="linha"><div><b>${c.bilhetes_emitidos ?? 0}</b><span class="mudo pequeno">bilhetes</span></div><div><b>${mt(c.receita)}</b><span class="mudo pequeno">receita</span></div><div><b>${c.validados ?? 0}</b><span class="mudo pequeno">entraram</span></div></div>
+    <div class="mudo pequeno">${c.reservas_por_pagar ?? 0} reservas por pagar · ${c.convites ?? 0} convites · ${c.envios_falhados ?? 0} envios falhados</div>
+    <p class="acc"><a class="btn" href="#vendas/${e.id}">Vendas</a>${podeVer("eventos") ? `<a class="btn sec" href="#eventos/${e.id}">Editar</a>` : ""}<a class="btn sec" href="../comprar/?e=${e.slug}" target="_blank">Página de compra</a></p></div>`; }).join("") + `</div>`;
+}
+
+// ---------- eventos ----------
+async function eventos([id]) {
+  if (id === "novo" || id) return editarEvento(id === "novo" ? null : id);
+  const evs = await eventosLista();
+  app.innerHTML = `<div class="topo"><h1>Eventos</h1>${eu.perfil === "admin" ? `<a class="btn" href="#eventos/novo">Novo evento</a>` : ""}</div><div class="cartao trocar"><table><tr><th>Evento</th><th>Data</th><th>Estado</th><th>Lotação</th><th></th></tr>${evs.map((e) => `<tr><td><b>${esc(e.nome)}</b><br><span class="mudo pequeno">/${e.slug}</span></td><td>${data(e.inicio_em)}</td><td>${e.estado}</td><td>${e.lotacao}</td><td class="acc"><a class="btn sec" href="#eventos/${e.id}">Abrir</a></td></tr>`).join("")}</table></div>`;
+}
+async function editarEvento(id) {
+  const ev = id ? (await q(sb.from("eventos").select("*").eq("id", id).single())) : { nome: "", slug: "", lotacao: 300, estado: "rascunho", reentrada_permitida: true, idade_minima: 18, transferencia_ate_horas: 24, faq: [] };
+  const tipos = id ? await q(sb.from("tipos_bilhete").select("*, lotes_preco(*)").eq("evento_id", id).order("ordem")) : [];
+  const admin = eu.perfil === "admin";
+  app.innerHTML = `<p><a href="#eventos">← Eventos</a></p><h1>${id ? esc(ev.nome) : "Novo evento"}</h1>
+  <div class="cartao"><div class="grelha">
+    <div>${campo("nome", "Nome", "text", ev.nome)}${campo("slug", "Endereço (slug)", "text", ev.slug, 'placeholder="noite-de-fado"')}<label>Estado</label><select id="estado">${opt(["rascunho", "a_venda", "esgotado", "encerrado", "cancelado"].map((x) => ({ x })), "x", (o) => o.x, ev.estado)}</select></div>
+    <div>${campo("inicio", "Início", "datetime-local", isoLocal(ev.inicio_em))}${campo("portas", "Abertura de portas", "datetime-local", isoLocal(ev.portas_em))}${campo("lotacao", "Lotação (máx. 1.200)", "number", ev.lotacao, 'max="1200" min="1"')}</div>
+    <div>${campo("local", "Local", "text", ev.local || C.LOCAL)}${campo("idade", "Idade mínima", "number", ev.idade_minima)}${campo("transf", "Transferência até (horas antes)", "number", ev.transferencia_ate_horas)}<div class="cx"><input type="checkbox" id="reentrada" ${ev.reentrada_permitida ? "checked" : ""}><label for="reentrada" style="margin:0">Permite saída e reentrada com a pulseira</label></div><div class="cx"><input type="checkbox" id="soInv" ${ev.so_pulseiras_inventario ? "checked" : ""}><label for="soInv" style="margin:0">Só aceita pulseiras do inventário (lista do fornecedor)</label></div></div>
+  </div>
+  <label>Descrição</label><textarea id="descricao" rows="3">${esc(ev.descricao || "")}</textarea>
+  ${campo("imagem", "URL da imagem de capa", "text", ev.imagem_url || "")}
+  <label>Perguntas frequentes (uma por linha: Pergunta | Resposta)</label><textarea id="faq" rows="4">${esc((ev.faq || []).map((f) => `${f.pergunta} | ${f.resposta}`).join("\n"))}</textarea>
+  ${admin ? `<p><button class="btn" id="btnGuardar">Guardar evento</button></p>` : ""}<p id="evMsg" class="oculto"></p></div>
+  ${id ? `<div class="cartao"><div class="topo"><h2>Tipos de bilhete e lotes</h2>${admin ? `<button class="btn sec" id="btnNovoTipo">Novo tipo</button>` : ""}</div><div class="trocar"><table><tr><th>Tipo</th><th>Natureza</th><th>Preço base</th><th>Qtd</th><th>Pulseira</th><th>Lotes</th><th></th></tr>
+    ${tipos.map((t) => `<tr><td><b>${esc(t.nome)}</b>${t.instrucao_porta ? `<br><span class="mudo pequeno">${esc(t.instrucao_porta)}</span>` : ""}</td><td>${t.tipo}</td><td>${mt(t.preco_base)}</td><td>${t.quantidade}</td><td><span style="display:inline-block;width:14px;height:14px;border-radius:7px;background:${t.cor_hex};vertical-align:middle"></span> ${esc(t.cor_pulseira)}</td>
+    <td class="pequeno">${(t.lotes_preco || []).sort((a, b) => a.ordem - b.ordem).map((l) => `${esc(l.nome)}: ${mt(l.preco)}${l.termina_em ? " até " + data(l.termina_em) : ""}${l.termina_apos_qtd ? " ou " + l.termina_apos_qtd + " vendidos" : ""}${l.so_crm ? " (só CRM)" : ""}${l.escaloes?.length ? " (grupo: " + l.escaloes.map((x) => x.min + "+ " + mt(x.preco)).join(", ") + ")" : ""}`).join("<br>") || "—"}${t.conta_grupo ? "<br><span class='mudo'>conta para o grupo</span>" : ""}${t.idade_min != null || t.idade_max != null ? `<br><span class='mudo'>idades: ${t.idade_max == null ? (t.idade_min ?? 0) + " ou mais" : (t.idade_min ?? 0) + " a " + t.idade_max} anos</span>` : ""}${t.activo === false ? "<br><span class='estado-cancelada'>já não se vende</span>" : ""}</td>
+    <td class="acc">${admin ? `<button class="btn sec" data-tipo="${t.id}">Editar</button>` : ""}</td></tr>`).join("")}</table></div></div>
+  ${admin ? `<div class="cartao"><h2>Promotores deste evento</h2><p class="mudo pequeno">Parceiros externos que vendem bilhetes deste evento. Vêem só este evento: o formulário de venda, as vendas deles (com os clientes deles) e o resumo de bilhetes vendidos. Não vêem clientes, mensagens nem outros eventos.</p><div id="promotores"></div></div>` : ""}
+  <div class="cartao"><h2>Quotas de convites</h2><div id="quotas"></div></div>
+  <div class="cartao"><h2>Códigos promocionais</h2><div id="promos"></div></div>` : ""}`;
+  $("#btnGuardar") && ($("#btnGuardar").onclick = async () => {
+    const faq = v("faq").split("\n").filter((l) => l.includes("|")).map((l) => { const [p, ...r] = l.split("|"); return { pergunta: p.trim(), resposta: r.join("|").trim() }; });
+    const obj = { nome: v("nome"), slug: v("slug").toLowerCase().replace(/[^a-z0-9-]/g, "-"), estado: v("estado"), inicio_em: deLocal(v("inicio")), portas_em: deLocal(v("portas")), lotacao: Number(v("lotacao")), local: v("local"), idade_minima: Number(v("idade")), transferencia_ate_horas: Number(v("transf")), reentrada_permitida: $("#reentrada").checked, so_pulseiras_inventario: $("#soInv").checked, descricao: v("descricao"), imagem_url: v("imagem") || null, faq };
+    try { const r = id ? await q(sb.from("eventos").update(obj).eq("id", id).select().single()) : await q(sb.from("eventos").insert(obj).select().single()); location.hash = "#eventos/" + r.id; if (id) { $("#evMsg").className = "ok"; $("#evMsg").textContent = "Guardado."; rota(); } }
+    catch (e) { mostrarErro($("#evMsg"), e); } });
+  if (!id) return;
+  if (admin) promotoresEvento(id);
+  $("#btnNovoTipo") && ($("#btnNovoTipo").onclick = () => editarTipo(id, null));
+  $$("[data-tipo]").forEach((b) => b.onclick = () => editarTipo(id, tipos.find((t) => t.id === b.dataset.tipo)));
+  // quotas
+  const staff = await q(sb.from("staff").select("id, nome, perfil").eq("activo", true).order("nome"));
+  const quotas = await q(sb.from("quotas_convites").select("*").eq("evento_id", id));
+  $("#quotas").innerHTML = `<table>${staff.map((s) => { const qu = quotas.find((x) => x.staff_id === s.id); return `<tr><td>${esc(s.nome)} <span class="mudo pequeno">${s.perfil}</span></td><td style="width:140px"><input type="number" min="0" value="${qu?.quota ?? 0}" data-quota="${s.id}" ${admin ? "" : "disabled"}></td></tr>`; }).join("")}</table>${admin ? `<p><button class="btn sec" id="btnQuotas">Guardar quotas</button></p>` : ""}`;
+  $("#btnQuotas") && ($("#btnQuotas").onclick = async () => { const rows = $$("[data-quota]").map((i) => ({ staff_id: i.dataset.quota, evento_id: id, quota: Number(i.value) })); await q(sb.from("quotas_convites").upsert(rows)); alert("Quotas guardadas."); });
+  // promos
+  const promos = await q(sb.from("codigos_promo").select("*").or(`evento_id.eq.${id},evento_id.is.null`).order("criado_em", { ascending: false }));
+  $("#promos").innerHTML = `<table><tr><th>Código</th><th>Desconto</th><th>Usos</th><th>Promotor</th><th>Validade</th></tr>${promos.map((p) => `<tr><td><b>${esc(p.codigo)}</b>${p.evento_id ? "" : " <span class='mudo pequeno'>(todos)</span>"}</td><td>${p.desconto_pct ? p.desconto_pct + "%" : ""} ${p.desconto_valor ? mt(p.desconto_valor) : ""}</td><td>${p.usos}${p.max_usos ? "/" + p.max_usos : ""}</td><td>${esc(p.promotor_nome || "")} ${p.comissao_pct ? p.comissao_pct + "%" : ""}</td><td>${p.valido_ate ? data(p.valido_ate) : "—"}</td></tr>`).join("")}</table>
+  ${["admin", "comunicacao"].includes(eu.perfil) ? `<div class="linha" style="margin-top:10px"><input id="pCod" placeholder="CÓDIGO" style="flex:1"><input id="pPct" type="number" placeholder="% desconto" style="width:120px"><input id="pVal" type="number" placeholder="MT desconto" style="width:120px"><input id="pMax" type="number" placeholder="máx. usos" style="width:110px"><input id="pProm" placeholder="promotor" style="flex:1"><input id="pCom" type="number" placeholder="% comissão" style="width:110px"><button class="btn" id="btnPromo">Criar</button></div>` : ""}`;
+  $("#btnPromo") && ($("#btnPromo").onclick = async () => { try { await q(sb.from("codigos_promo").insert({ evento_id: id, codigo: v("pCod").toUpperCase(), desconto_pct: v("pPct") || null, desconto_valor: v("pVal") || null, max_usos: v("pMax") || null, promotor_nome: v("pProm") || null, comissao_pct: v("pCom") || 0 })); rota(); } catch (e) { alert(e.message); } });
+}
+function editarTipo(eventoId, t) {
+  t = t || { nome: "", tipo: "pago", preco_base: 0, quantidade: 100, cor_pulseira: "azul", cor_hex: "#2563eb", ordem: 1, lotes_preco: [] };
+  const lotes = (t.lotes_preco || []).sort((a, b) => a.ordem - b.ordem);
+  dialogo(`<h2>${t.id ? "Editar tipo" : "Novo tipo de bilhete"}</h2>${campo("tNome", "Nome", "text", t.nome)}<label>Natureza</label><select id="tTipo">${opt([{ x: "pago", n: "Pago" }, { x: "convite", n: "Convite (escrito CONVITE)" }, { x: "convite_especial", n: "Convite especial (sinal dourado, sem a palavra convite)" }], "x", (o) => o.n, t.tipo)}</select>
+  <div class="grelha">${campo("tPreco", "Preço base (MT)", "number", t.preco_base)}${campo("tQtd", "Quantidade", "number", t.quantidade)}${campo("tCor", "Cor da pulseira", "text", t.cor_pulseira)}${campo("tHex", "Cor (hex)", "color", t.cor_hex)}${campo("tOrdem", "Ordem", "number", t.ordem)}</div>
+  ${campo("tInst", "Instrução à porta (opcional)", "text", t.instrucao_porta || "")}
+  <div class="cx"><input type="checkbox" id="tGrupo" ${t.conta_grupo ? "checked" : ""}><label for="tGrupo" style="margin:0">Conta para o desconto de grupo (ex.: adultos)</label></div>
+  <div class="grelha">${campo("tIdMin", "Idade de (opcional)", "number", t.idade_min ?? "", 'min="0" max="120"')}${campo("tIdMax", "Idade até (opcional)", "number", t.idade_max ?? "", 'min="0" max="120"')}</div>
+  <p class="mudo pequeno">Preencha as idades quando o preço depende da idade (ex.: Adulto de 18, sem limite; Criança de 4 até 12). A página de compra passa então a pedir o número de adultos e a idade de cada criança, e escolhe o bilhete certo.</p>
+  <h3>Lotes de preço (só para bilhetes pagos)</h3><p class="mudo pequeno">Um por linha: Nome | Preço | termina em (AAAA-MM-DD HH:MM, opcional) | termina após N vendidos (opcional) | crm (escreva "crm" para pré-venda só a clientes) | grupo (opcional, ex.: 4=3800, 9=3650 quer dizer: de 4 pessoas, 3.800 por pessoa; de 9, 3.650)</p>
+  <textarea id="tLotes" rows="5">${esc(lotes.map((l) => `${l.nome} | ${l.preco} | ${l.termina_em ? isoLocal(l.termina_em).replace("T", " ") : ""} | ${l.termina_apos_qtd ?? ""} | ${l.so_crm ? "crm" : ""} | ${(l.escaloes || []).map((x) => x.min + "=" + x.preco).join(", ")}`).join("\n"))}</textarea>
+  <p><button class="btn" id="tGuardar">Guardar</button></p><p id="tMsg" class="oculto"></p>`, () => {
+    $("#tGuardar").onclick = async () => { try {
+      const obj = { evento_id: eventoId, nome: v("tNome"), tipo: v("tTipo"), preco_base: Number(v("tPreco")), quantidade: Number(v("tQtd")), cor_pulseira: v("tCor"), cor_hex: v("tHex"), ordem: Number(v("tOrdem")), instrucao_porta: v("tInst") || null, conta_grupo: $("#tGrupo").checked,
+        idade_min: v("tIdMin") === "" ? null : Number(v("tIdMin")), idade_max: v("tIdMax") === "" ? null : Number(v("tIdMax")) };
+      if (obj.idade_min != null && obj.idade_max != null && obj.idade_min > obj.idade_max) throw new Error("A idade 'de' não pode ser maior que a idade 'até'.");
+      const ls = v("tLotes").split("\n").filter((l) => l.trim()).map((l, i) => { const [n, p, te, qd, crm, gr] = l.split("|").map((x) => (x || "").trim());
+        const escaloes = (gr || "").split(/[,;]/).map((x) => x.split("=").map((y) => Number(y.replace(/[^\d]/g, "")))).filter(([m, pr]) => m > 1 && pr >= 0 && !isNaN(pr)).map(([m, pr]) => ({ min: m, preco: pr })).sort((a, b) => a.min - b.min);
+        return { nome: n, preco: Number(p), termina_em: te ? deLocal(te.replace(" ", "T")) : null, termina_apos_qtd: qd ? Number(qd) : null, so_crm: /crm/i.test(crm || ""), escaloes, ordem: i + 1 }; });
+      const r = t.id ? await q(sb.from("tipos_bilhete").update(obj).eq("id", t.id).select().single()) : await q(sb.from("tipos_bilhete").insert(obj).select().single());
+      const antigos = (t.lotes_preco || []).slice().sort((a, b) => a.ordem - b.ordem);
+      for (const [i, l] of ls.entries()) { if (antigos[i]) await q(sb.from("lotes_preco").update(l).eq("id", antigos[i].id)); else await q(sb.from("lotes_preco").insert({ ...l, tipo_bilhete_id: r.id })); }
+      for (const l of antigos.slice(ls.length)) { try { await q(sb.from("lotes_preco").delete().eq("id", l.id)); } catch { throw new Error(`O lote "${l.nome}" já tem vendas e não pode ser apagado. Mude-lhe o preço ou a data em vez de o apagar.`); } }
+      $("#dlg").close(); rota(); } catch (e) { mostrarErro($("#tMsg"), e); } }; });
+}
+
+// ---------- vendas ----------
+const MEIOS = [{ x: "numerario", n: "Numerário" }, { x: "mpesa", n: "M-Pesa" }, { x: "mkesh", n: "mKesh" }, { x: "pos_bancario", n: "POS bancário" }, { x: "transferencia", n: "Transferência bancária" }];
+const MEIO_NOME = Object.fromEntries(MEIOS.map((m) => [m.x, m.n]));
+const precisaRef = (meio) => ["mpesa", "mkesh", "transferencia"].includes(meio);
+async function vendas([evId]) {
+  const evs = (await eventosLista()).filter((e) => e.estado === "a_venda" || e.estado === "esgotado" || e.id === evId);
+  evId = evId || evs[0]?.id; if (!evId) { app.innerHTML = "<p>Nenhum evento à venda.</p>"; return; }
+  const precos = await rpc("fn_precos_evento", { p_evento: evId });
+  // comprovativos: só depois da actualização da base de dados de 13/11 (sem ela, a lista funciona como antes)
+  let enc; try { enc = await q(sb.from("encomendas").select("*, cliente:clientes(nome, telemovel), vendedor:staff!criado_por(nome, perfil), confirmou:staff!confirmado_por(nome), itens:encomenda_itens(quantidade, preco_unitario, tipo:tipos_bilhete(nome)), bilhetes(id, codigo_curto, estado, token, portador_nome, convite_tipo, cliente_id), comprovativos(id, caminho, nome_ficheiro, estado, motivo, criado_em)").eq("evento_id", evId).order("criado_em", { ascending: false }).limit(300)); } catch { enc = await q(sb.from("encomendas").select("*, cliente:clientes(nome, telemovel), vendedor:staff!criado_por(nome, perfil), confirmou:staff!confirmado_por(nome), itens:encomenda_itens(quantidade, preco_unitario, tipo:tipos_bilhete(nome)), bilhetes(id, codigo_curto, estado, token, portador_nome, convite_tipo, cliente_id)").eq("evento_id", evId).order("criado_em", { ascending: false }).limit(300)); }
+  // mesas do evento (módulo de mesas), se o evento estiver ligado a uma planta
+  let mesas = {}; try { mesas = (await rpc("mesas_das_encomendas", { p_encomendas: enc.map((e) => e.id) })) || {}; } catch { mesas = {}; }
+  const temMesas = Object.keys(mesas).length > 0;
+  const mesaDe = (e) => { const m = mesas[e.id]; if (!m) return temMesas && e.estado === "paga" ? `<span class="mudo pequeno">sem mesa</span>` : ""; return m.mesa ? `<b>Mesa ${esc(m.mesa)}</b>${m.estado === "provisorio" ? "<br><span class='mudo pequeno'>provisório</span>" : ""}` : `<span class="mudo pequeno">por sentar</span>`; };
+  app.innerHTML = `<div class="topo"><h1>Vendas</h1><select id="selEv" style="width:auto">${opt(evs, "id", (e) => e.nome, evId)}</select></div>
+  <div class="cartao"><h2>Nova venda</h2><div class="grelha">
+    <div>${campo("vTel", "Telemóvel do cliente (WhatsApp)", "tel", "", 'placeholder="84 123 4567"')}${campo("vNome", "Nome", "text")}${campo("vEmail", "Email (opcional)", "email")}</div>
+    <div><label>Bilhetes</label>${precos.map((p) => `<div class="linha"><span style="flex:1">${esc(p.nome)} · ${mt(p.preco)} <span class="mudo pequeno">${esc(p.lote || "")} · ${p.venda_aberta === false ? "venda fechada" : p.disponivel + " disp."}</span>${p.escaloes?.length ? `<br><span class="mudo pequeno">${textoEscaloes(p.escaloes, p.preco)}</span>` : ""}</span><input type="number" min="0" max="50" value="0" data-tipo="${p.tipo_bilhete_id}" style="width:80px" ${p.venda_aberta === false ? "disabled" : ""}></div>`).join("")}
+      <p class="pequeno">Total: <b id="vTotal">0 MT</b><br><span id="vDetalhe" class="mudo"></span></p>
+      <label>Entrega</label><select id="vEntrega"><option value="whatsapp">WhatsApp</option><option value="impressao">O cliente imprime</option><option value="levantamento">Levanta no CNB</option></select>${campo("vPromo", "Código promocional", "text")}</div>
+    <div><label>Pagamento</label>
+      <div class="cx"><input type="radio" name="vPago" id="vPagoSim" value="sim"><label for="vPagoSim" style="margin:0">Já pagou (comprovativo ou balcão)</label></div>
+      <div class="cx"><input type="radio" name="vPago" id="vPagoNao" value="nao"><label for="vPagoNao" style="margin:0">Ainda não pagou (fica reservado)</label></div>
+      <div id="vPagoCampos" class="oculto"><label>Meio</label><select id="vMeio">${opt(MEIOS, "x", (m) => m.n)}</select>${campo("vRef", "Referência do comprovativo", "text", "", 'placeholder="ex. QK7H2X9"')}</div>
+      ${campo("vObs", "Observações (sem dados sensíveis)", "text")}</div></div>
+    <p><button class="btn" id="btnVender">Registar venda</button></p><p id="vMsg" class="oculto"></p></div>
+  <div class="cartao"><div class="tabs" id="filtro"><button data-f="" class="act">Todas</button><button data-f="minhas">As minhas</button><button data-f="reservada">Por pagar</button><button data-f="verificar">Comprovativos por verificar${(() => { const n = enc.filter((e) => e.estado === "reservada" && (e.comprovativos || []).some((k) => k.estado === "pendente")).length; return n ? ` <span class="badge">${n}</span>` : ""; })()}</button><button data-f="paga">Pagas</button><button data-f="cancelada">Canceladas</button></div>
+  <div class="trocar"><table id="tabEnc"></table></div>
+  ${temMesas ? `<p class="mudo pequeno">As encomendas pagas aparecem na <a href="../mesas/" target="_blank">planta das mesas</a> como grupos por sentar.</p>` : ""}</div>`;
+  $("#selEv").onchange = () => location.hash = "#vendas/" + $("#selEv").value;
+  let cotT = null;
+  const totalForm = () => { clearTimeout(cotT); cotT = setTimeout(async () => {
+    const itens = $$("[data-tipo]").map((i) => ({ tipo_bilhete_id: i.dataset.tipo, quantidade: Number(i.value || 0) })).filter((i) => i.quantidade > 0);
+    if (!itens.length) { $("#vTotal").textContent = mt(0); $("#vDetalhe").textContent = ""; return; }
+    try { const c = await rpc("fn_cotar_encomenda", { p_evento: evId, p_itens: itens, p_telemovel: v("vTel") || null }); $("#vTotal").textContent = mt(c.total); $("#vDetalhe").textContent = c.itens.map((x) => `${x.quantidade}× ${x.nome} a ${mt(x.preco_unitario)}`).join(", "); }
+    catch { let t = 0; for (const i of itens) t += i.quantidade * Number(precos.find((p) => p.tipo_bilhete_id === i.tipo_bilhete_id)?.preco || 0); $("#vTotal").textContent = mt(t); $("#vDetalhe").textContent = ""; } }, 200); };
+  $$("[data-tipo]").forEach((i) => i.oninput = totalForm);
+  $$("[name=vPago]").forEach((r) => r.onchange = () => $("#vPagoCampos").classList.toggle("oculto", !$("#vPagoSim").checked));
+  $("#vTel").onblur = async () => { const t = v("vTel").replace(/\D/g, ""); if (t.length < 9) return; const { data } = await sb.from("clientes").select("nome, email").eq("telemovel", t.length === 9 ? "+258" + t : "+" + t).maybeSingle(); if (data) { $("#vNome").value = data.nome; $("#vEmail").value = data.email || ""; } };
+  $("#btnVender").onclick = async () => {
+    const itens = $$("[data-tipo]").map((i) => ({ tipo_bilhete_id: i.dataset.tipo, quantidade: Number(i.value) })).filter((i) => i.quantidade > 0);
+    const pago = $("#vPagoSim").checked ? true : $("#vPagoNao").checked ? false : null;
+    if (!v("vTel") || !v("vNome")) return mostrarErro($("#vMsg"), "Indique o telemóvel e o nome do cliente.");
+    if (!itens.length) return mostrarErro($("#vMsg"), "Escolha pelo menos um bilhete.");
+    if (pago === null) return mostrarErro($("#vMsg"), "Indique se o cliente já pagou.");
+    if (pago && precisaRef(v("vMeio")) && !v("vRef")) return mostrarErro($("#vMsg"), "Escreva a referência que vem no comprovativo.");
+    $("#btnVender").disabled = true;
+    let r = null;
+    try {
+      r = await rpc("fn_criar_encomenda", { p: { evento_id: evId, cliente: { telemovel: v("vTel"), nome: v("vNome"), email: v("vEmail") }, itens, canal: "assistida", entrega: v("vEntrega"), codigo_promo: v("vPromo") || null, observacoes: v("vObs") } });
+      if (pago) await rpc("fn_confirmar_pagamento", { p_encomenda: r.encomenda_id, p_meio: v("vMeio"), p_referencia: v("vRef") || null, p_documento_fiscal: null });
+    } catch (e) {
+      $("#btnVender").disabled = false;
+      if (!r) return mostrarErro($("#vMsg"), e);
+      await vendas([evId]); mostrarErro($("#vMsg"), `A venda ficou registada como reserva, mas o pagamento não foi confirmado: ${e.message}`); return;
+    }
+    await vendas([evId]); $("#vMsg").className = "ok"; $("#vMsg").textContent = `Venda registada (${mt(r.total)}${pago ? ", paga" : `, reservada até ${data(r.expira_em)}`}).`;
+    depoisDeAccao(r.encomenda_id, null);
+  };
+  const desenhar = (f) => { const linhas = enc.filter((e) => !f || (f === "minhas" ? e.criado_por === eu.id : f === "verificar" ? e.estado === "reservada" && (e.comprovativos || []).some((k) => k.estado === "pendente") : e.estado === f));
+    $("#tabEnc").innerHTML = `<tr><th>Quando</th><th>Cliente</th><th>Bilhetes</th><th>Total</th><th>Estado</th><th>Entrega</th>${temMesas ? "<th>Mesa</th>" : ""}<th></th></tr>` + (linhas.map((e) => `<tr><td class="pequeno">${data(e.criado_em)}<br><span class="mudo">${e.canal === "online" ? "online" : "vendido por " + esc(e.vendedor?.nome || "—")}${e.vendedor?.perfil === "promotor" ? " (promotor)" : ""}</span></td><td><b>${esc(e.cliente?.nome)}</b><br><span class="mudo pequeno">${esc(fmtTel(e.cliente?.telemovel))}</span>${e.observacoes ? `<br><span class="mudo pequeno">${esc(e.observacoes)}</span>` : ""}</td>
+    <td class="pequeno">${(e.itens || []).map((i) => `${i.quantidade}× ${esc(i.tipo?.nome)}`).join(", ")}${e.bilhetes?.length ? "<br>" + e.bilhetes.map((b) => `<a href="../b/?t=${b.token}" target="_blank" class="${b.estado === "anulado" ? "estado-anulado" : ""}">${b.codigo_curto}</a>`).join(" ") : ""}</td>
+    <td>${mt(e.total)}${e.meio_pagamento ? `<br><span class="mudo pequeno">${esc(MEIO_NOME[e.meio_pagamento] || e.meio_pagamento)} ${esc(e.referencia_pagamento || "")}${e.confirmou?.nome ? `<br>confirmado por ${esc(e.confirmou.nome)}` : ""}</span>` : ""}</td><td><span class="estado-${e.estado}">${e.estado}</span><br><span class="mudo pequeno">${e.termos_aceites_em ? "termos ✔" : "termos por aceitar"}</span>${htmlComps(e)}</td><td>${e.entrega}${e.levantado_em ? "<br><span class='mudo pequeno'>levantado</span>" : ""}</td>${temMesas ? `<td>${mesaDe(e)}</td>` : ""}
+    <td class="acc">${e.estado === "reservada" ? `<button class="btn" data-pagar="${e.id}">Confirmar pagamento</button>` : ""}${["reservada", "paga"].includes(e.estado) && !String(e.cliente?.telemovel || "").startsWith("+000") ? `<button class="btn verde" data-wa="${e.id}">WhatsApp</button>` : ""}${e.estado === "paga" && e.entrega === "levantamento" && !e.levantado_em ? `<button class="btn sec" data-levantar="${e.id}">Levantado</button>` : ""}${e.bilhetes?.some((b) => b.estado === "emitido") ? `<button class="btn sec" data-bilhetes="${e.id}">Bilhetes</button>` : ""}<button class="btn sec" data-termos="${e.token_publico}">Ligação termos</button>${["reservada", "paga"].includes(e.estado) ? `<button class="btn sec" data-cancelar="${e.id}">Cancelar</button>` : ""}</td></tr>`).join("") || `<tr><td colspan="8" class="mudo">Sem vendas.</td></tr>`);
+    $$("[data-pagar]").forEach((b) => b.onclick = () => confirmarPagamento(enc.find((x) => x.id === b.dataset.pagar), evId));
+    $$("#tabEnc [data-vercomp]").forEach((b) => b.onclick = () => verComprovativo(b.dataset.vercomp));
+    $$("#tabEnc [data-recusar]").forEach((b) => b.onclick = async () => { const m = prompt("Porque não aceita este comprovativo? (o cliente vê esta frase e pode enviar outro)\nEx.: o valor ainda não entrou na conta; o valor não corresponde; a imagem não se lê."); if (!m) return;
+      try { await rpc("fn_recusar_comprovativo", { p_comprovativo: b.dataset.recusar, p_motivo: m }); await vendas([evId]); actualizarBadgeComp(); } catch (er) { alert(er.message); } });
+    $$("[data-wa]").forEach((b) => b.onclick = () => abrirWhatsapp(b.dataset.wa, null, () => vendas([evId])));
+    $$("[data-levantar]").forEach((b) => b.onclick = async () => { await rpc("fn_registar_levantamento", { p_encomenda: b.dataset.levantar }); vendas([evId]); });
+    $$("[data-cancelar]").forEach((b) => b.onclick = async () => { const m = prompt("Motivo do cancelamento:"); if (!m) return; const e = enc.find((x) => x.id === b.dataset.cancelar); const reemb = e.estado === "paga" && confirm("A encomenda está paga. Registar como REEMBOLSADA? (Cancelar = só cancelar)"); await rpc("fn_cancelar_encomenda", { p_encomenda: e.id, p_motivo: m, p_reembolso: reemb }); vendas([evId]); });
+    $$("[data-bilhetes]").forEach((b) => b.onclick = () => gerirBilhetes(enc.find((x) => x.id === b.dataset.bilhetes), evId));
+    $$("[data-termos]").forEach((b) => b.onclick = () => { const u = `${location.origin}${location.pathname.replace("admin/", "")}t/?o=${b.dataset.termos}`; navigator.clipboard?.writeText(u); alert("Ligação copiada:\n" + u); }); };
+  $$("#filtro button").forEach((b) => b.onclick = () => { $$("#filtro button").forEach((x) => x.classList.remove("act")); b.classList.add("act"); desenhar(b.dataset.f); }); desenhar("");
+  actualizarBadgeComp();
+}
+function confirmarPagamento(e, evId) {
+  const comps = e.comprovativos || [];
+  dialogo(`<h2>Confirmar pagamento</h2><p><b>${esc(e.cliente?.nome)}</b> · ${mt(e.total)}${e.canal === "online" ? ` <span class="mudo pequeno">referência no descritivo: CNB${esc(String(e.token_publico || "").slice(0, 6).toUpperCase())}</span>` : ""}</p>
+  ${comps.length ? `<div class="cartao" style="margin:8px 0">${htmlComps({ ...e, estado: "" })}<p class="aviso pequeno" style="margin-top:8px">Antes de confirmar, veja no extracto ou na aplicação do banco (ou da carteira móvel) que o valor entrou mesmo na conta. Não confirme só pela imagem: um comprovativo pode ser falsificado.</p></div>` : ""}<label>Meio</label><select id="pMeio">${opt(MEIOS, "x", (m) => m.n, e.meio_pagamento)}</select>${campo("pRef", "Referência do comprovativo", "text", e.referencia_pagamento || "")}${campo("pDoc", "N.º do documento fiscal (opcional)", "text", e.documento_fiscal || "")}<p class="mudo pequeno">Confirme o valor e a referência no comprovativo ou no extracto antes de confirmar. A mesma referência não pode pagar duas vendas.</p><p><button class="btn" id="pOk">Confirmar</button></p><p id="pMsg" class="oculto"></p>`,
+    () => { $$("#dlg [data-vercomp]").forEach((b) => b.onclick = () => verComprovativo(b.dataset.vercomp));
+      $("#pOk").onclick = async () => { if (precisaRef(v("pMeio")) && !v("pRef")) return mostrarErro($("#pMsg"), "Escreva a referência que vem no comprovativo.");
+      try { await rpc("fn_confirmar_pagamento", { p_encomenda: e.id, p_meio: v("pMeio"), p_referencia: v("pRef") || null, p_documento_fiscal: v("pDoc") || null }); $("#dlg").close(); await vendas([evId]); actualizarBadgeComp(); depoisDeAccao(e.id, null); } catch (er) { mostrarErro($("#pMsg"), er); } }; });
+}
+function gerirBilhetes(e, evId) {
+  const depois = async (novoId) => { $("#dlg").close(); await vendas([evId]); const nb = await q(sb.from("bilhetes").select("cliente_id").eq("id", novoId).single()); depoisDeAccao(e.id, nb.cliente_id); };
+  dialogo(`<h2>Bilhetes de ${esc(e.cliente?.nome)}</h2><table>${e.bilhetes.map((b) => `<tr><td><b>${b.codigo_curto}</b><br><span class="mudo pequeno">${esc(b.portador_nome || "")} · ${b.estado}</span></td><td class="acc">${b.estado === "emitido" ? `<a class="btn sec" href="../b/?t=${b.token}" target="_blank">Ver</a><button class="btn sec" data-re="${b.id}">Reemitir</button><button class="btn sec" data-tr="${b.id}">Transferir</button>` : ""}</td></tr>`).join("")}</table><p id="bMsg" class="oculto"></p>`, () => {
+    $$("[data-re]").forEach((x) => x.onclick = async () => { const m = prompt("Motivo da reemissão (o código antigo deixa de valer):"); if (!m) return; try { depois(await rpc("fn_reemitir_bilhete", { p_bilhete: x.dataset.re, p_motivo: m })); } catch (er) { mostrarErro($("#bMsg"), er); } });
+    $$("[data-tr]").forEach((x) => x.onclick = async () => { const n = prompt("Nome do novo portador:"); const t = n && prompt("Telemóvel do novo portador:"); if (!t) return; try { depois(await rpc("fn_transferir_bilhete", { p_bilhete: x.dataset.tr, p_novo_nome: n, p_novo_telemovel: t })); } catch (er) { mostrarErro($("#bMsg"), er); } }); });
+}
+
+// ---------- convites ----------
+async function convites() {
+  const evs = (await eventosLista()).filter((e) => ["a_venda", "esgotado"].includes(e.estado));
+  const tipos = await q(sb.from("tipos_bilhete").select("id, nome, tipo, evento_id").neq("tipo", "pago").eq("activo", true));
+  const meus = await q(sb.from("bilhetes").select("codigo_curto, portador_nome, convite_tipo, convite_motivo, estado, emitido_em, token, evento:eventos(nome), staff:staff!convidado_por(nome)").neq("convite_tipo", "pago").order("emitido_em", { ascending: false }).limit(200));
+  app.innerHTML = `<h1>Convites</h1><div class="cartao"><div class="grelha"><div><label>Evento</label><select id="cEv">${opt(evs, "id", (e) => e.nome)}</select><label>Tipo</label><select id="cTipo"></select>${campo("cQtd", "Quantidade", "number", 1)}</div>
+  <div>${campo("cNome", "Nome do convidado", "text")}${campo("cTel", "Telemóvel (opcional; sem ele o convite é impresso)", "tel")}${campo("cMotivo", "Motivo (obrigatório)", "text", "", 'placeholder="Imprensa, patrocinador, artista…"')}</div></div>
+  <p><button class="btn" id="btnConvite">Emitir convite</button></p><p id="cMsg" class="oculto"></p></div>
+  <div class="cartao trocar"><h2>Convites emitidos</h2><table><tr><th>Quando</th><th>Evento</th><th>Convidado</th><th>Tipo</th><th>Motivo</th><th>Por</th><th>Estado</th></tr>${meus.map((b) => `<tr><td class="pequeno">${data(b.emitido_em)}</td><td>${esc(b.evento?.nome)}</td><td><a href="../b/?t=${b.token}" target="_blank">${esc(b.portador_nome)}</a> <span class="mudo pequeno">${b.codigo_curto}</span></td><td>${b.convite_tipo === "convite_especial" ? "★ especial" : "convite"}</td><td>${esc(b.convite_motivo)}</td><td>${esc(b.staff?.nome || "")}</td><td>${b.estado}</td></tr>`).join("")}</table></div>`;
+  const fTipos = () => { $("#cTipo").innerHTML = opt(tipos.filter((t) => t.evento_id === $("#cEv").value), "id", (t) => `${t.nome} (${t.tipo === "convite_especial" ? "especial" : "convite"})`); }; $("#cEv").onchange = fTipos; fTipos();
+  $("#btnConvite").onclick = async () => { try { const r = await rpc("fn_criar_convite", { p_evento: v("cEv"), p_tipo_bilhete: v("cTipo"), p_nome: v("cNome"), p_telemovel: v("cTel") || null, p_motivo: v("cMotivo"), p_quantidade: Number(v("cQtd")) || 1 }); const comTel = !!v("cTel"); await convites(); $("#cMsg").className = "ok"; $("#cMsg").textContent = `${r.bilhetes.length} convite(s) emitido(s).${comTel ? "" : " Sem telemóvel: imprima o convite a partir da lista abaixo."}`; if (comTel) depoisDeAccao(r.encomenda_id, null); } catch (e) { mostrarErro($("#cMsg"), e); } };
+}
+
+// ---------- clientes ----------
+async function clientes([id]) {
+  if (id) return fichaCliente(id);
+  app.innerHTML = `<h1>Clientes</h1><div class="cartao"><p class="linha"><input id="cProc" placeholder="nome, telemóvel, email ou etiqueta" style="flex:1"><button class="btn" id="btnProc">Procurar</button></p><div class="trocar" id="cLista"></div></div>`;
+  const procurar = async () => { const t = v("cProc"); let b = sb.from("clientes").select("id, nome, telemovel, email, etiquetas, criado_em").is("fundido_em", null).order("criado_em", { ascending: false }).limit(100);
+    if (t) b = b.or(`nome.ilike.%${t}%,telemovel.ilike.%${t.replace(/\D/g, "") || t}%,email.ilike.%${t}%,etiquetas.cs.{${t}}`);
+    const l = await q(b); $("#cLista").innerHTML = `<table><tr><th>Nome</th><th>Telemóvel</th><th>Email</th><th>Etiquetas</th><th>Desde</th></tr>${l.map((c) => `<tr><td><a href="#clientes/${c.id}">${esc(c.nome)}</a></td><td>${c.telemovel}</td><td>${esc(c.email || "")}</td><td>${(c.etiquetas || []).map((e) => `<span class="etiqueta">${esc(e)}</span>`).join(" ")}</td><td class="pequeno">${dataCurta(c.criado_em)}</td></tr>`).join("")}</table>`; };
+  $("#btnProc").onclick = procurar; $("#cProc").onkeydown = (e) => e.key === "Enter" && procurar(); procurar();
+}
+async function fichaCliente(id) {
+  const c = await q(sb.from("clientes").select("*").eq("id", id).single());
+  const enc = await q(sb.from("encomendas").select("id, estado, total, criado_em, evento:eventos(nome), bilhetes(codigo_curto, estado)").eq("cliente_id", id).order("criado_em", { ascending: false }));
+  const cons = await q(sb.from("consentimentos").select("*").eq("cliente_id", id).order("seq", { ascending: false }));
+  const actual = {}; for (const k of cons) if (!(k.canal in actual)) actual[k.canal] = k;
+  const msgs = await q(sb.from("mensagens").select("canal, categoria, direccao, corpo, estado, criado_em").eq("cliente_id", id).order("criado_em", { ascending: false }).limit(30));
+  app.innerHTML = `<p><a href="#clientes">← Clientes</a></p><h1>${esc(c.nome)}</h1><div class="grelha">
+  <div class="cartao">${campo("fNome", "Nome", "text", c.nome)}${campo("fTel", "Telemóvel", "text", c.telemovel)}${campo("fEmail", "Email", "email", c.email || "")}${campo("fEt", "Etiquetas (separadas por vírgula)", "text", (c.etiquetas || []).join(", "))}<label>Observações</label><textarea id="fObs" rows="3">${esc(c.observacoes || "")}</textarea><p class="linha"><button class="btn" id="fGuardar">Guardar</button><button class="btn sec" id="fExportar">Exportar dados</button>${eu.perfil === "admin" ? `<button class="btn perigo" id="fEliminar">Eliminar (anonimizar)</button>` : ""}</p><p id="fMsg" class="oculto"></p></div>
+  <div class="cartao"><h3>Consentimentos actuais</h3><table>${["termos", "whatsapp", "sms", "email"].map((k) => `<tr><td>${k}</td><td>${actual[k] ? (actual[k].concedido ? "<b class='estado-paga'>sim</b>" : "<b class='estado-cancelada'>não</b>") : "<span class='mudo'>sem registo</span>"}</td><td class="pequeno mudo">${actual[k] ? `${data(actual[k].criado_em)} · ${actual[k].recolhido_via}` : ""}</td><td class="acc">${k !== "termos" ? `<button class="btn sec" data-cons="${k}" data-val="${actual[k]?.concedido ? "0" : "1"}">${actual[k]?.concedido ? "Retirar" : "Registar (declarado)"}</button>` : ""}</td></tr>`).join("")}</table><p class="mudo pequeno">Registos feitos pela equipa valem como declaração do cliente feita presencialmente; prefira sempre a aceitação pelo próprio na página de termos.</p></div></div>
+  <div class="cartao trocar"><h3>Histórico de compras</h3><table><tr><th>Quando</th><th>Evento</th><th>Estado</th><th>Total</th><th>Bilhetes</th></tr>${enc.map((e) => `<tr><td class="pequeno">${data(e.criado_em)}</td><td>${esc(e.evento?.nome)}</td><td class="estado-${e.estado}">${e.estado}</td><td>${mt(e.total)}</td><td class="pequeno">${(e.bilhetes || []).map((b) => `${b.codigo_curto} (${b.estado})`).join(", ")}</td></tr>`).join("") || "<tr><td colspan=5 class='mudo'>Sem compras.</td></tr>"}</table></div>
+  <div class="cartao trocar"><h3>Mensagens</h3><table>${msgs.map((m) => `<tr><td class="pequeno">${data(m.criado_em)}</td><td>${m.direccao === "entrada" ? "⬅" : "➡"} ${m.canal} <span class="mudo">${m.categoria}</span></td><td class="pequeno">${esc(m.corpo || "")}</td><td>${m.estado}</td></tr>`).join("") || "<tr><td class='mudo'>Sem mensagens.</td></tr>"}</table></div>`;
+  $("#fGuardar").onclick = async () => { try { await q(sb.from("clientes").update({ nome: v("fNome"), email: v("fEmail") || null, observacoes: v("fObs") || null, etiquetas: v("fEt").split(",").map((x) => x.trim()).filter(Boolean) }).eq("id", id)); $("#fMsg").className = "ok"; $("#fMsg").textContent = "Guardado."; } catch (e) { mostrarErro($("#fMsg"), e); } };
+  $("#fExportar").onclick = async () => { const d = await rpc("fn_exportar_cliente", { p_cliente: id }); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(d, null, 2)], { type: "application/json" })); a.download = `cliente-${id}.json`; a.click(); };
+  $("#fEliminar") && ($("#fEliminar").onclick = async () => { const m = prompt("Isto apaga nome, contactos e observações, e retira todos os consentimentos (os registos fiscais ficam anónimos). Motivo:"); if (!m) return; await rpc("fn_eliminar_cliente", { p_cliente: id, p_motivo: m }); location.hash = "#clientes"; });
+  $$("[data-cons]").forEach((b) => b.onclick = async () => { await rpc("fn_registar_consentimento", { p_cliente: id, p_canal: b.dataset.cons, p_concedido: b.dataset.val === "1", p_via: "admin" }); fichaCliente(id); });
+}
+
+// ---------- campanhas ----------
+async function campanhas([id]) {
+  const evs = await eventosLista(); const lista = await q(sb.from("campanhas").select("*").order("criada_em", { ascending: false }));
+  const selEv = (nome) => `<select id="${nome}" multiple size="3">${opt(evs, "id", (e) => e.nome)}</select>`;
+  app.innerHTML = `<h1>Campanhas</h1><div class="cartao"><h2>Nova campanha</h2><div class="grelha">
+  <div>${campo("kNome", "Nome interno", "text")}<label>Canal</label><select id="kCanal"><option value="whatsapp">WhatsApp</option><option value="sms">SMS</option></select><label>Categoria</label><select id="kCat"><option value="marketing">Marketing (novos eventos, promoções)</option><option value="utilidade">Utilidade (informação sobre bilhete já comprado)</option></select>${campo("kModelo", "Modelo WhatsApp aprovado", "text", "cnb_novo_evento")}${campo("kParams", "Parâmetros do modelo (separados por |; use {nome})", "text", "{nome}|")}</div>
+  <div><label>Texto (SMS e registo; use {nome})</label><textarea id="kCorpo" rows="4"></textarea>${campo("kQuando", "Agendar para (opcional)", "datetime-local")}</div>
+  <div><label>Segmento: etiquetas (vírgulas)</label><input id="kEt"><label>Comprou bilhete para</label>${selEv("kComprou")}<label>Não comprou para</label>${selEv("kNao")}<label>Compareceu a</label>${selEv("kComp")}<label>Faltou a</label>${selEv("kFaltou")}</div></div>
+  <p><button class="btn" id="kCriar">Criar campanha</button></p><p id="kMsg" class="oculto"></p></div>
+  <div class="cartao trocar"><table><tr><th>Campanha</th><th>Canal</th><th>Segmento</th><th>Destinatários</th><th>Custo est. (USD)</th><th>Estado</th><th></th></tr>${lista.map((k) => `<tr><td><b>${esc(k.nome)}</b><br><span class="mudo pequeno">${esc(k.corpo).slice(0, 80)}</span></td><td>${k.canal} / ${k.categoria}</td><td class="pequeno">${esc(JSON.stringify(k.segmento))}</td><td>${k.destinatarios}</td><td>${Number(k.custo_estimado).toFixed(2)}</td><td>${k.estado}${k.agendada_para ? "<br><span class='mudo pequeno'>" + data(k.agendada_para) + "</span>" : ""}</td>
+  <td class="acc">${k.estado === "rascunho" ? `<button class="btn sec" data-prep="${k.id}">Contar e estimar</button><button class="btn sec" data-teste="${k.id}">Enviar teste</button><button class="btn" data-env="${k.id}">Enviar</button>` : `<button class="btn sec" data-est="${k.id}">Resultados</button>`}</td></tr>`).join("")}</table></div>`;
+  const sel = (id) => [...$("#" + id).selectedOptions].map((o) => o.value);
+  $("#kCriar").onclick = async () => { try { await q(sb.from("campanhas").insert({ nome: v("kNome"), canal: v("kCanal"), categoria: v("kCat"), modelo: v("kModelo") || null, corpo: v("kCorpo"), parametros: v("kParams").split("|").map((x) => x.trim()).filter(Boolean), agendada_para: deLocal(v("kQuando")), criada_por: eu.id,
+    segmento: { etiquetas: v("kEt").split(",").map((x) => x.trim()).filter(Boolean), comprou_evento: sel("kComprou"), nao_comprou_evento: sel("kNao"), compareceu_evento: sel("kComp"), faltou_evento: sel("kFaltou") } })); campanhas([]); } catch (e) { mostrarErro($("#kMsg"), e); } };
+  $$("[data-prep]").forEach((b) => b.onclick = async () => { const r = await rpc("fn_preparar_campanha", { p_campanha: b.dataset.prep }); alert(`${r.destinatarios} destinatários com consentimento. Custo estimado: ${r.custo_estimado_usd.toFixed(2)} USD (preços Meta "Resto de África"; o fornecedor pode acrescentar margem).`); campanhas([]); });
+  $$("[data-teste]").forEach((b) => b.onclick = async () => { const t = prompt("Telemóvel de teste (tem de estar no CRM):"); if (!t) return; try { await rpc("fn_enviar_campanha", { p_campanha: b.dataset.teste, p_teste_telemovel: t }); alert("Teste enfileirado."); } catch (e) { alert(e.message); } });
+  $$("[data-env]").forEach((b) => b.onclick = async () => { const k = lista.find((x) => x.id === b.dataset.env); if (!confirm(`Enviar "${k.nome}" a ${k.destinatarios} destinatários? (Conte primeiro se o número for 0.)`)) return; const n = await rpc("fn_enviar_campanha", { p_campanha: k.id }); alert(`${n} mensagens enfileiradas (respeitando horário 08h–20h e limite semanal).`); campanhas([]); });
+  $$("[data-est]").forEach((b) => b.onclick = async () => { const m = await q(sb.from("mensagens").select("estado").eq("campanha_id", b.dataset.est)); const c = {}; for (const x of m) c[x.estado] = (c[x.estado] || 0) + 1; alert(Object.entries(c).map(([k, n]) => `${k}: ${n}`).join("\n") || "Sem mensagens."); });
+}
+
+// ---------- mensagens ----------
+const ESTADO_MSG = { manual: "por enviar (WhatsApp da equipa)", ignorada: "não enviada", pendente: "pendente (API)", enviada: "enviada", entregue: "entregue", lida: "lida", falhou: "falhou", recebida: "recebida" };
+async function mensagens() {
+  const m = await q(sb.from("mensagens").select("*, cliente:clientes(nome), por:staff!enviada_por(nome)").order("criado_em", { ascending: false }).limit(200));
+  app.innerHTML = `<h1>Mensagens</h1><div class="cartao trocar"><table><tr><th>Quando</th><th>Cliente</th><th>Canal</th><th>Conteúdo</th><th>Estado</th></tr>${m.map((x) => `<tr><td class="pequeno">${data(x.criado_em)}</td><td>${esc(x.cliente?.nome || x.destinatario)}</td><td>${x.direccao === "entrada" ? "⬅ recebida" : "➡"} ${x.canal}<br><span class="mudo pequeno">${x.categoria} ${esc(x.modelo || "")}</span></td><td class="pequeno">${esc((x.corpo || "").slice(0, 160))}${x.imagem_url ? ` <a href="${x.imagem_url}" target="_blank">imagem</a>` : ""}</td><td>${esc(ESTADO_MSG[x.estado] || x.estado)}${x.por?.nome ? `<br><span class="mudo pequeno">por ${esc(x.por.nome)}${x.enviada_em ? ", " + data(x.enviada_em) : ""}</span>` : ""}${x.erro ? `<br><span class="estado-cancelada pequeno">${esc(x.erro)}</span>` : ""}</td></tr>`).join("")}</table></div>`;
+}
+
+// ---------- relatórios ----------
+async function relatorios() {
+  const [v1, v2, v3, v4, v5, v6] = await Promise.all(["v_vendas_evento", "v_conciliacao_evento", "v_vendas_por_meio", "v_afluencia_porta", "v_vendas_por_lote", "v_vendas_por_vendedor"].map((t) => q(sb.from(t).select("*"))));
+  const tab = (rows, titulo) => rows.length ? `<div class="cartao trocar"><h2>${titulo}</h2><table><tr>${Object.keys(rows[0]).filter((k) => !k.endsWith("_id")).map((k) => `<th>${k.replace(/_/g, " ")}</th>`).join("")}</tr>${rows.map((r) => `<tr>${Object.entries(r).filter(([k]) => !k.endsWith("_id")).map(([k, x]) => `<td>${k === "hora" ? data(x) : esc(x ?? "")}</td>`).join("")}</tr>`).join("")}</table></div>` : "";
+  app.innerHTML = `<div class="topo"><h1>Relatórios</h1><button class="btn sec" id="btnExcel">Exportar Excel</button></div>${tab(v2, "Conciliação por evento")}${tab(v6, "Vendas por vendedor (quem registou a venda)")}${tab(v1, "Vendas por tipo de bilhete")}${tab(v5, "Vendas por lote")}${tab(v3, "Vendas por meio de pagamento, dia e quem confirmou")}${tab(v4, "Afluência à porta por hora")}`;
+  $("#btnExcel").onclick = async () => { const XLSX = await import("https://esm.sh/xlsx@0.18.5"); const wb = XLSX.utils.book_new(); for (const [n, r] of [["Conciliacao", v2], ["Por vendedor", v6], ["Por tipo", v1], ["Por lote", v5], ["Por meio", v3], ["Afluencia", v4]]) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(r), n); XLSX.writeFile(wb, `relatorios-bilhetes-${new Date().toISOString().slice(0, 10)}.xlsx`); };
+}
+
+// ---------- pulseiras (inventário) ----------
+async function pulseiras() {
+  const r = await rpc("fn_resumo_inventario"); const admin = eu.perfil === "admin";
+  app.innerHTML = `<h1>Inventário de pulseiras</h1><div class="grelha">
+  <div class="cartao kpi"><b>${r.total || 0}</b><span class="mudo">chips no inventário</span><div class="pequeno">${r.disponiveis || 0} disponíveis, ${r.usadas || 0} usadas, ${r.danificadas || 0} danificadas, ${r.perdidas || 0} perdidas, ${r.reserva || 0} de reserva</div>
+  <table style="margin-top:10px"><tr><th>Lote</th><th>Cor</th><th>Chips</th><th>Disponíveis</th></tr>${(r.lotes || []).map((l) => `<tr><td>${esc(l.lote || "")}</td><td>${esc(l.cor || "")}</td><td>${l.n}</td><td>${l.disponiveis}</td></tr>`).join("") || "<tr><td colspan=4 class='mudo'>Sem lotes.</td></tr>"}</table></div>
+  ${admin ? `<div class="cartao"><h2>Importar lista do fornecedor</h2><p class="mudo pequeno">Aceita o ficheiro Excel (.xls/.xlsx) ou CSV tal como vem do fornecedor: uma coluna com os UIDs (14 caracteres hexadecimais). Todas as folhas são lidas; pode também colar os UIDs no campo de texto.</p>
+    <input type="file" id="invFicheiro" accept=".xls,.xlsx,.csv,.txt"><label>Ou colar UIDs (um por linha)</label><textarea id="invTexto" rows="4"></textarea>
+    <div class="grelha">${campo("invLote", "Lote (fornecedor, data)", "text", "Fornecedor, " + new Date().toLocaleDateString("pt-PT"))}${campo("invCor", "Cor (opcional)", "text")}</div>
+    <div class="cx"><input type="checkbox" id="invReserva"><label for="invReserva" style="margin:0">Estes são chips de reserva (sobressalentes)</label></div>
+    <p><button class="btn" id="invImportar">Importar</button></p><p id="invMsg" class="oculto"></p></div>` : ""}</div>
+  <div class="cartao"><h2>Marcar pulseira</h2><div class="linha"><input id="mUid" placeholder="UID (ex. 041B91AA312490)" style="flex:1"><select id="mEstado" style="width:auto"><option value="danificada">danificada</option><option value="perdida">perdida</option>${admin ? `<option value="disponivel">disponível (repor)</option>` : ""}</select><input id="mObs" placeholder="observação" style="flex:1"><button class="btn sec" id="mOk">Marcar</button></div><p id="mMsg" class="oculto"></p></div>`;
+  $("#mOk").onclick = async () => { try { await rpc("fn_marcar_pulseira_inventario", { p_uid: v("mUid"), p_estado: v("mEstado"), p_obs: v("mObs") || null }); $("#mMsg").className = "ok"; $("#mMsg").textContent = "Marcada."; } catch (e) { mostrarErro($("#mMsg"), e); } };
+  $("#invImportar") && ($("#invImportar").onclick = async () => { try {
+    let uids = v("invTexto").split(/\s+/).filter(Boolean);
+    const f = $("#invFicheiro").files[0];
+    if (f) { const XLSX = await import("https://esm.sh/xlsx@0.18.5"); const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
+      for (const n of wb.SheetNames) for (const row of XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1 })) for (const c of row) if (/^[0-9a-fA-F:\s-]{8,24}$/.test(String(c))) uids.push(String(c)); }
+    uids = uids.map((u) => u.replace(/[^0-9a-fA-F]/g, "").toUpperCase()).filter((u) => u.length === 14 || u.length === 8);
+    if (!uids.length) return mostrarErro($("#invMsg"), "Nenhum UID encontrado.");
+    const r2 = await rpc("fn_importar_pulseiras", { p_uids: uids, p_lote: v("invLote"), p_cor: v("invCor") || null, p_reserva: $("#invReserva").checked });
+    $("#invMsg").className = "ok"; $("#invMsg").textContent = `Importados ${r2.novos} chips novos; ${r2.repetidos} já existiam; ${r2.invalidos} inválidos.`; setTimeout(pulseiras, 1200); } catch (e) { mostrarErro($("#invMsg"), e); } });
+}
+
+async function promotoresEvento(evId) {
+  const [lista, ligados] = await Promise.all([q(sb.from("staff").select("id, nome, activo").eq("perfil", "promotor").order("nome")), q(sb.from("promotores_eventos").select("staff_id").eq("evento_id", evId))]);
+  const tem = new Set(ligados.map((x) => x.staff_id));
+  $("#promotores").innerHTML = lista.length ? lista.map((p) => `<div class="cx"><input type="checkbox" id="pr_${p.id}" data-prom="${p.id}" ${tem.has(p.id) ? "checked" : ""}><label for="pr_${p.id}" style="margin:0">${esc(p.nome)}${p.activo ? "" : " (inactivo)"}</label></div>`).join("") + `<p id="prMsg" class="oculto"></p>`
+    : `<p class="mudo">Ainda não há promotores. Em Definições › Equipa, adicione a pessoa com o perfil "promotor" e defina o PIN.</p>`;
+  $$("[data-prom]").forEach((c) => c.onchange = async () => { try {
+      if (c.checked) await q(sb.from("promotores_eventos").insert({ staff_id: c.dataset.prom, evento_id: evId, criado_por: eu.id }));
+      else await q(sb.from("promotores_eventos").delete().eq("staff_id", c.dataset.prom).eq("evento_id", evId));
+      $("#prMsg").className = "ok"; $("#prMsg").textContent = "Guardado."; } catch (e) { c.checked = !c.checked; mostrarErro($("#prMsg"), e); } });
+}
+
+// ---------- definições ----------
+const FUNCAO_MENU = { garcom: "garçom", caixa: "caixa", registo: "registo", supervisor: "supervisor", gerente: "gerente", fotos: "fotografias" };
+async function definicoes() {
+  const defs = Object.fromEntries((await q(sb.from("definicoes").select("*"))).map((d) => [d.chave, d.valor]));
+  const staff = await q(sb.from("staff").select("id, nome, email, perfil, menu_perfil, activo, auth_user_id, tem_pin").order("activo", { ascending: false }).order("nome"));
+  const termos = await q(sb.from("termos_versoes").select("*").order("publicado_em", { ascending: false }));
+  const admin = eu.perfil === "admin"; const org = defs.organizacao || {}; const modo = defs.whatsapp?.modo || "manual"; const pm = defs.pagamento_manual || {};
+  const selPerfil = (s) => `<select data-perfil="${s.id}" style="width:auto" ${admin ? "" : "disabled"}>${[["", "sem acesso"], ["vendedor", "vendedor"], ["porta", "porta"], ["comunicacao", "comunicação"], ["promotor", "promotor (externo)"], ["admin", "admin"]].map(([x, n]) => `<option value="${x}" ${(s.perfil || "") === x ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+  app.innerHTML = `<h1>Definições</h1><div class="grelha">
+  <div class="cartao"><h2>Envio de WhatsApp</h2><label>Modo</label><select id="waModo" ${admin ? "" : "disabled"}><option value="manual" ${modo !== "automatico" ? "selected" : ""}>Manual: a equipa envia pelo WhatsApp da Requinte (abre já escrita)</option><option value="automatico" ${modo === "automatico" ? "selected" : ""}>Automático: pela API do WhatsApp Business</option></select>
+    <p class="mudo pequeno">Use o automático só depois de a conta da API estar aprovada e as funções de envio publicadas. Ao mudar, as mensagens que estiverem na fila manual não são reenviadas.</p>${admin ? `<p><button class="btn" id="waGuardar">Guardar</button></p>` : ""}<p id="waMsg" class="oculto"></p></div>
+  <div class="cartao"><h2>Organização</h2>${campo("oNome", "Nome", "text", org.nome)}${campo("oNuit", "NUIT", "text", org.nuit)}${campo("oMorada", "Morada", "text", org.morada)}${campo("oTel", "Telefone de contacto", "text", org.telefone)}${campo("oEmail", "Email", "email", org.email)}${campo("oMpesa", "Número M-Pesa para pagamentos (aparece na mensagem de reserva)", "text", org.mpesa_numero || "")}${campo("oBase", "URL base das páginas (sem barra final)", "text", defs.urls?.base)}${campo("oPrazo", "Prazo de pagamento da reserva assistida (minutos)", "number", defs.reservas?.prazo_pagamento_minutos)}${campo("oPrazoOn", "Prazo de pagamento online (minutos)", "number", defs.reservas?.prazo_pagamento_online_minutos)}${campo("oHi", "Envios de marketing: hora início", "number", defs.comunicacao?.hora_inicio)}${campo("oHf", "hora fim", "number", defs.comunicacao?.hora_fim)}${campo("oMax", "Máx. mensagens de marketing por cliente/semana", "number", defs.comunicacao?.max_marketing_semana)}${admin ? `<p><button class="btn" id="oGuardar">Guardar</button></p>` : ""}<p id="oMsg" class="oculto"></p></div>
+  <div class="cartao"><h2>Pagamento por transferência bancária</h2><p class="mudo pequeno">Na compra online, o cliente vê estes dados depois de reservar, paga fora do sistema e envia o comprovativo na página. A equipa confirma a entrada do valor e só então o bilhete é emitido. A opção aparece quando o banco e a conta ou o NIB estiverem preenchidos. O M-Pesa funciona da mesma forma quando o número estiver preenchido em Organização.</p>
+    ${campo("bBanco", "Banco", "text", pm.transferencia?.banco || "")}${campo("bTitular", "Titular da conta", "text", pm.transferencia?.titular || org.nome || "")}${campo("bConta", "N.º de conta", "text", pm.transferencia?.conta || "")}${campo("bNib", "NIB", "text", pm.transferencia?.nib || "")}
+    ${campo("bFecho", "A transferência fecha quantas horas antes do evento", "number", pm.fecho_transferencia_horas ?? 72, 'min="0"')}${campo("bPrazo", "Horas que o cliente tem para pagar e enviar o comprovativo", "number", pm.prazo_comprovativo_horas ?? 24, 'min="1"')}${campo("bConf", "Prazo de confirmação indicado ao cliente", "text", pm.prazo_confirmacao || "48 horas")}
+    ${admin ? `<p><button class="btn" id="bGuardar">Guardar</button></p>` : ""}<p id="bMsg" class="oculto"></p></div>
+  <div class="cartao"><h2>Pagar já com M-Pesa</h2><p class="mudo pequeno">Na compra online, o cliente recebe no telemóvel o pedido do M-Pesa, escreve o PIN e o bilhete sai na hora, sem confirmação da equipa. Precisa da ligação oficial da Vodacom (chaves de acesso aprovadas) e da função de pagamentos instalada no Supabase. Ligue só depois disso; se o pagamento falhar, o cliente pode pagar com comprovativo na mesma reserva.</p>
+    <div class="cx"><input type="checkbox" id="mApi" ${defs.mpesa_api?.activo ? "checked" : ""} ${admin ? "" : "disabled"}><label for="mApi" style="margin:0">Oferecer "M-Pesa: pagar já" na página de compra</label></div>
+    ${admin ? `<p><button class="btn" id="mGuardar">Guardar</button></p>` : ""}<p id="mMsg" class="oculto"></p></div></div>
+  <div class="cartao trocar"><h2>Equipa</h2><p class="mudo pequeno">Caixas, supervisores e gerentes do restaurante vendem bilhetes (perfil vendedor, posto automaticamente). Cada pessoa entra pela entrada única com o nome e o PIN, que é o mesmo do menu digital. Cada venda fica registada com o nome de quem a fez.</p>
+  <table><tr><th>Nome</th><th>Restaurante</th><th>Bilhetes</th><th>Entrada</th><th></th></tr>${staff.map((s) => `<tr class="${s.activo ? "" : "mudo"}"><td>${esc(s.nome)}${s.email && !/@example\.com$/.test(s.email) ? `<br><span class="mudo pequeno">${esc(s.email)}</span>` : ""}</td><td>${esc(FUNCAO_MENU[s.menu_perfil] || "—")}</td><td>${selPerfil(s)}</td><td class="pequeno">${s.tem_pin ? "PIN" : "<span class='mudo'>sem PIN</span>"}${s.auth_user_id ? " · já entrou" : ""}${s.activo ? "" : " · inactivo"}</td><td class="acc">${admin ? `<button class="btn sec" data-pin="${s.id}">PIN</button><button class="btn sec" data-act="${s.id}">${s.activo ? "Desactivar" : "Activar"}</button>` : ""}</td></tr>`).join("")}</table>
+  ${admin ? `<div class="linha" style="margin-top:10px"><input id="sNome" placeholder="Nome" style="flex:1"><input id="sEmail" placeholder="email (opcional)" style="flex:1"><select id="sPerfil" style="width:auto"><option>vendedor</option><option>porta</option><option>comunicacao</option><option value="promotor">promotor (externo)</option><option>admin</option></select><button class="btn" id="sAdd">Adicionar</button></div><p class="mudo pequeno">Depois de adicionar, defina o PIN. Pessoas do restaurante já estão na lista: basta mudar a coluna "Bilhetes". Um promotor só vê os eventos que lhe forem atribuídos (no evento, em "Promotores deste evento").</p>` : ""}</div>
+  <div class="cartao"><h2>Termos e política de privacidade</h2><table><tr><th>Tipo</th><th>Versão</th><th>Título</th><th>Publicado</th><th>Activo</th></tr>${termos.map((t) => `<tr><td>${t.tipo}</td><td>${t.versao}</td><td>${esc(t.titulo)}</td><td>${dataCurta(t.publicado_em)}</td><td>${t.activo ? "✔" : ""}</td></tr>`).join("")}</table>
+  ${admin ? `<h3>Nova versão</h3><div class="grelha"><div><label>Tipo</label><select id="tvTipo"><option value="termos">termos</option><option value="privacidade">privacidade</option></select>${campo("tvVersao", "Versão", "text", new Date().toISOString().slice(0, 7) + "-v2")}${campo("tvTitulo", "Título", "text")}</div><div><label>Texto (markdown simples)</label><textarea id="tvTexto" rows="8"></textarea></div></div><p><button class="btn" id="tvGuardar">Publicar e activar</button></p><p class="mudo pequeno">A nova versão aplica-se às compras futuras; as anteriores ficam arquivadas com os consentimentos que as referem.</p>` : ""}</div>`;
+  $("#waGuardar") && ($("#waGuardar").onclick = async () => { const novo = v("waModo"); if (novo === "automatico" && modo !== "automatico" && !confirm("Passar para envio automático pela API? As mensagens só saem se a conta do WhatsApp Business e as funções de envio estiverem configuradas.")) return;
+    try { await q(sb.from("definicoes").upsert({ chave: "whatsapp", valor: { ...(defs.whatsapp || {}), modo: novo } })); MODO_WA = novo; $("#waMsg").className = "ok"; $("#waMsg").textContent = "Guardado."; } catch (e) { mostrarErro($("#waMsg"), e); } });
+  $("#oGuardar") && ($("#oGuardar").onclick = async () => { try { for (const [k, val] of [["organizacao", { ...org, nome: v("oNome"), nuit: v("oNuit"), morada: v("oMorada"), telefone: v("oTel"), email: v("oEmail"), mpesa_numero: v("oMpesa"), emola_numero: undefined }], ["urls", { base: v("oBase").replace(/\/$/, "") }], ["reservas", { prazo_pagamento_minutos: Number(v("oPrazo")), prazo_pagamento_online_minutos: Number(v("oPrazoOn")) }], ["comunicacao", { ...(defs.comunicacao || {}), hora_inicio: Number(v("oHi")), hora_fim: Number(v("oHf")), max_marketing_semana: Number(v("oMax")) }]]) await q(sb.from("definicoes").upsert({ chave: k, valor: val })); $("#oMsg").className = "ok"; $("#oMsg").textContent = "Guardado."; } catch (e) { mostrarErro($("#oMsg"), e); } });
+  $("#bGuardar") && ($("#bGuardar").onclick = async () => { try {
+    const nib = v("bNib").replace(/\s/g, ""); if (nib && !/^\d{21}$/.test(nib) && !confirm("O NIB em Moçambique tem normalmente 21 algarismos. Guardar mesmo assim?")) return;
+    await q(sb.from("definicoes").upsert({ chave: "pagamento_manual", valor: { ...pm, transferencia: { banco: v("bBanco"), titular: v("bTitular"), conta: v("bConta"), nib }, fecho_transferencia_horas: Number(v("bFecho")) || 0, prazo_comprovativo_horas: Math.max(1, Number(v("bPrazo")) || 24), prazo_confirmacao: v("bConf") || "48 horas" } }));
+    $("#bMsg").className = "ok"; $("#bMsg").textContent = "Guardado."; } catch (e) { mostrarErro($("#bMsg"), e); } });
+  $("#mGuardar") && ($("#mGuardar").onclick = async () => { try {
+    const on = $("#mApi").checked; if (on && !defs.mpesa_api?.activo && !confirm("Ligue só depois de a Vodacom aprovar a ligação e de a função de pagamentos estar instalada com as chaves. Ligar agora?")) return;
+    await q(sb.from("definicoes").upsert({ chave: "mpesa_api", valor: { ...(defs.mpesa_api || {}), activo: on } })); defs.mpesa_api = { ...(defs.mpesa_api || {}), activo: on };
+    $("#mMsg").className = "ok"; $("#mMsg").textContent = on ? "Ligado: a página de compra passa a oferecer M-Pesa: pagar já." : "Desligado."; } catch (e) { mostrarErro($("#mMsg"), e); } });
+  $("#sAdd") && ($("#sAdd").onclick = async () => { try { await q(sb.from("staff").insert({ nome: v("sNome"), email: v("sEmail") || null, perfil: v("sPerfil") })); definicoes(); } catch (e) { alert(e.message); } });
+  $$("[data-perfil]").forEach((sel) => sel.onchange = async () => { const s = staff.find((x) => x.id === sel.dataset.perfil);
+    if (s.id === eu.id && sel.value !== "admin" && !confirm("Vai tirar a si próprio o perfil de administrador. Continuar?")) { sel.value = s.perfil || ""; return; }
+    try { await q(sb.from("staff").update({ perfil: sel.value || null }).eq("id", s.id)); s.perfil = sel.value || null; } catch (e) { alert(e.message); sel.value = s.perfil || ""; } });
+  $$("[data-pin]").forEach((b) => b.onclick = async () => { const p = prompt("Novo PIN (4 a 6 algarismos). É o mesmo do menu digital:"); if (!p) return; try { await rpc("fn_definir_pin", { p_staff: b.dataset.pin, p_pin: p }); definicoes(); } catch (e) { alert(e.message); } });
+  $$("[data-act]").forEach((b) => b.onclick = async () => { const s = staff.find((x) => x.id === b.dataset.act); await q(sb.from("staff").update({ activo: !s.activo }).eq("id", s.id)); definicoes(); });
+  $("#tvGuardar") && ($("#tvGuardar").onclick = async () => { try { await q(sb.from("termos_versoes").update({ activo: false }).eq("tipo", v("tvTipo")).eq("activo", true)); await q(sb.from("termos_versoes").insert({ tipo: v("tvTipo"), versao: v("tvVersao"), titulo: v("tvTitulo"), texto_md: v("tvTexto"), activo: true })); definicoes(); } catch (e) { alert(e.message); } });
+}
+arranque();
+</script>
+</body>
+</html>
