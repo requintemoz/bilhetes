@@ -13,7 +13,7 @@
 <meta property="og:image" content="https://bilhetes.requinte.co.mz/img/partilha-eventos.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta name="theme-color" content="#17130f">
+<meta name="theme-color" content="#ffffff">
 <link rel="icon" href="icone.svg" type="image/svg+xml">
 <link rel="preload" href="fontes/bodoni-moda.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="fontes/archivo.woff2" as="font" type="font/woff2" crossorigin>
@@ -43,13 +43,12 @@ a{color:inherit}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 /* Cabeçalho */
-.topo{background:var(--noite);color:var(--champanhe)}
-.topo-in{max-width:1240px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
-.marca{display:flex;align-items:baseline;gap:10px;text-decoration:none}
-.marca b{font-family:var(--serif);font-weight:600;font-size:1.6rem;letter-spacing:.01em}
-.marca span{font-size:.85rem;color:#c9b894;font-stretch:90%}
-.tel{font-stretch:88%;font-weight:600;text-decoration:none;font-size:1rem;padding:6px 0;border-bottom:1px solid rgba(232,211,166,.4)}
-.tel:hover{border-color:var(--champanhe)}
+.topo{background:#fff;color:var(--tinta);border-bottom:1px solid var(--linha)}
+.topo-in{max-width:1240px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.marca{display:block;line-height:0}
+.marca img{height:58px;width:auto}
+.tel{font-stretch:88%;font-weight:600;text-decoration:none;font-size:1rem;padding:6px 0;border-bottom:1px solid var(--linha)}
+.tel:hover{border-color:var(--tinta)}
 
 /* Abertura */
 .abertura{max-width:1240px;margin:0 auto;padding:64px 24px 40px;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:48px;align-items:end}
@@ -75,6 +74,8 @@ a{color:inherit}
 .precos small{font-weight:500;font-size:.8rem;margin-right:6px;font-stretch:100%;letter-spacing:0}
 .nota{font-size:.92rem;margin:10px 0 0}
 .accao{margin-top:auto;padding-top:28px}
+.apoio{display:flex;align-items:center;gap:16px;margin:28px 0 0;padding-top:20px;border-top:1px solid var(--linha-p);font-size:.88rem}
+.apoio img{height:60px;width:auto}
 .btn{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:14px 30px;border-radius:4px;font:inherit;font-weight:700;font-size:1.02rem;text-decoration:none;border:0;cursor:pointer;transition:background-color .15s,color .15s}
 .btn[aria-disabled="true"]{opacity:.55;pointer-events:none}
 
@@ -122,11 +123,13 @@ a{color:inherit}
 
 /* Rodapé */
 .rodape{background:var(--noite);color:#cdbf9f}
-.rodape-in{max-width:1240px;margin:0 auto;padding:40px 24px;display:flex;flex-wrap:wrap;gap:12px 40px;align-items:baseline;justify-content:space-between;font-size:.95rem}
+.rodape-in{max-width:1240px;margin:0 auto;padding:40px 24px;display:flex;flex-wrap:wrap;gap:12px 40px;align-items:center;justify-content:space-between;font-size:.95rem}
 .rodape strong{color:var(--champanhe);font-family:var(--serif);font-weight:600;font-size:1.25rem}
 .rodape a{text-decoration:none;border-bottom:1px solid rgba(205,191,159,.4)}
 .rodape a:hover{color:var(--champanhe)}
-.rodape .equipa{font-size:.85rem;opacity:.75}
+.redes{display:flex;gap:22px}
+.redes a{display:inline-flex;align-items:center;gap:8px}
+.redes svg{width:18px;height:18px;flex:none}
 
 @media (max-width:1060px){
   .selo{display:none}
@@ -144,7 +147,7 @@ a{color:inherit}
 @media (max-width:560px){
   body{font-size:1rem}
   .topo-in{padding:12px 16px}
-  .marca span{display:none}
+  .marca img{height:46px}
   .abertura,.info,#estado{padding-left:16px;padding-right:16px}
   .corpo{padding:28px 16px 36px}
   .evento .arte{aspect-ratio:auto;height:auto}
@@ -158,7 +161,7 @@ a{color:inherit}
 <body>
 <header class="topo">
   <div class="topo-in">
-    <a class="marca" href="./"><b>Requinte</b><span>Wine Restaurante</span></a>
+    <a class="marca" href="./"><img src="img/logo-requinte.png" alt="Requinte Wine Restaurante" width="101" height="58"></a>
     <a class="tel" href="tel:+258846262054">84 626 2054</a>
   </div>
 </header>
@@ -205,7 +208,7 @@ a{color:inherit}
     <span>Clube Náutico da Beira, Beira</span>
     <a href="tel:+258846262054">84 626 2054</a>
     <a href="mailto:requinte.moz@gmail.com">requinte.moz@gmail.com</a>
-    <a class="equipa" href="entrar/">Entrada da equipa</a>
+    <span class="redes"><a href="https://www.instagram.com/requintegroup/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.3" cy="6.7" r="1" fill="currentColor" stroke="none"/></svg>Instagram</a><a href="https://www.facebook.com/profile.php?id=61577727187553" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13.5 21v-7.6h2.6l.4-3h-3V8.5c0-.9.3-1.5 1.5-1.5h1.6V4.3c-.3 0-1.2-.1-2.3-.1-2.3 0-3.9 1.4-3.9 4v2.2H7.8v3h2.6V21h3.1z"/></svg>Facebook</a></span>
   </div>
 </footer>
 
@@ -219,7 +222,7 @@ a{color:inherit}
   // Arte e cores de cada evento (recortes dos cartazes). Eventos sem entrada aqui usam a imagem do evento ou o nome.
   var ESTILO = {
     "reveillon-clube-nautico": { tema: "noite", arte: "img/arte-requinte-reveillon.jpg" },
-    "clube-n-utico---praia-rampa-pesca": { tema: "mar", arte: "img/arte-reveillon-praia.jpg" }
+    "clube-n-utico---praia-rampa-pesca": { tema: "mar", arte: "img/arte-reveillon-praia.jpg", apoio: { nome: "Corona", logo: "img/logo-corona.png" } }
   };
   var DIAS = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
   var MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -272,7 +275,7 @@ a{color:inherit}
       : "<span class=\"btn\" aria-disabled=\"true\">Venda fechada</span>";
     var horas = e.portas_em && e.portas_em !== e.inicio_em
       ? "Portas às " + partes(e.portas_em).hora + ", início às " + partes(e.inicio_em).hora + "."
-      : "Início às " + partes(e.inicio_em).hora + ".";
+      : (e.portas_em ? "Portas às " : "Início às ") + partes(e.inicio_em).hora + ".";
     return "<article class=\"evento " + tema + "\" aria-labelledby=\"ev-" + i + "\">"
       + (arte ? "<img class=\"arte\" src=\"" + esc(arte) + "\" alt=\"\" loading=\"" + (i < 2 ? "eager" : "lazy") + "\">"
               : "<div class=\"arte-texto\" aria-hidden=\"true\">" + esc(e.nome) + "</div>")
@@ -284,6 +287,7 @@ a{color:inherit}
       + (p.html ? "<ul class=\"precos\">" + p.html + "</ul>" : "")
       + (p.nota ? "<p class=\"nota\">" + p.nota + "</p>" : "")
       + "<div class=\"accao\">" + botao + "</div>"
+      + (est.apoio ? "<p class=\"apoio\"><span>Com o patrocínio de</span><img src=\"" + esc(est.apoio.logo) + "\" alt=\"" + esc(est.apoio.nome) + "\" loading=\"lazy\"></p>" : "")
       + "</div></article>";
   }
 

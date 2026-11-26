@@ -142,7 +142,7 @@ async function carregar() {
   ev = e; document.title = `${e.nome} | Bilhetes`;
   const dia = data(e.portas_em || e.inicio_em, { dateStyle: "full", timeStyle: undefined });
   $("#nome").textContent = e.nome; $("#quando").textContent = dia.charAt(0).toUpperCase() + dia.slice(1); $("#local").textContent = e.local;
-  $("#horas").textContent = (e.portas_em && e.portas_em !== e.inicio_em ? `Portas às ${hora(e.portas_em)}, início às ${hora(e.inicio_em)}` : `Às ${hora(e.inicio_em)}`) + (e.idade_minima > 0 ? `. Maiores de ${e.idade_minima} anos` : "");
+  $("#horas").textContent = (e.portas_em && e.portas_em !== e.inicio_em ? `Portas às ${hora(e.portas_em)}, início às ${hora(e.inicio_em)}` : `${e.portas_em ? "Portas às" : "Às"} ${hora(e.inicio_em)}`) + (e.idade_minima > 0 ? `. Maiores de ${e.idade_minima} anos` : "");
   $("#org").textContent = e.organizacao?.nome || "";
   $("#rodape").innerHTML = `${esc(e.organizacao?.nome || "")}${e.organizacao?.telefone ? ` · Informações: <a href="tel:+258${esc(String(e.organizacao.telefone).replace(/\D/g, "").slice(-9))}">${esc(e.organizacao.telefone)}</a>` : ""}`;
   if (e.descricao) { $("#descricao").innerHTML = htmlDescricao(e.descricao); $("#descricao").classList.remove("oculto"); }
