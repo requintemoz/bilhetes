@@ -159,7 +159,7 @@ function desenharMeios() {
   const ms = pm.metodos || [];
   if (!ms.length) {
     $("#meios").innerHTML = ""; $("#pagNota").className = "aviso";
-    $("#pagNota").textContent = `De momento não é possível reservar online${pm.transferencia_fechada ? ` (as reservas online fecham ${pm.fecho_transferencia_horas} horas antes do evento)` : ""}. Contacte-nos${ev.organizacao?.telefone ? " pelo " + ev.organizacao.telefone : ""} ou passe pelo nosso balcão.`;
+    $("#pagNota").textContent = `De momento não é possível reservar online${pm.transferencia_fechada ? ` (a venda online terminou ${pm.fecho_online_em ? "a " + data(pm.fecho_online_em) : pm.fecho_transferencia_horas + " horas antes do evento"})` : ""}. Contacte-nos${ev.organizacao?.telefone ? " pelo " + ev.organizacao.telefone : ""} ou passe pelo nosso balcão.`;
     $("#btnComprar").disabled = true; return;
   }
   const prazo = pm.prazo_confirmacao || "48 horas";
@@ -179,7 +179,7 @@ function actualizarPag() {
   const pm = ev.pagamento, m = metodoEscolhido(), x = $("#pagExtra"), nota = $("#pagNota"); if (!pm || !m || !x) return;
   const prazo = pm.prazo_confirmacao || "48 horas"; const tot = totalActual;
   if (m.modo === "reserva") {
-    const l = fimDoLote(); const fecho = new Date(new Date(ev.inicio_em) - (pm.fecho_transferencia_horas ?? 72) * 3600e3);
+    const l = fimDoLote(); const fecho = pm.fecho_online_em ? new Date(pm.fecho_online_em) : new Date(new Date(ev.inicio_em) - (pm.fecho_transferencia_horas ?? 72) * 3600e3);
     const ate = l && new Date(l.lote_termina_em) < fecho ? l.lote_termina_em : null;
     x.innerHTML = ate
       ? `<p class="aviso"><b>O preço de hoje só vale para pagamentos feitos até ${esc(data(ate))}.</b> Guardamos a sua reserva até essa data. Se o pagamento não chegar até lá, a reserva é cancelada${l.proximo_preco ? ` e o preço passa para ${mt(l.proximo_preco)}${modoIdades ? " por adulto" : ""}` : " e passa a valer o preço seguinte"}.</p>`
