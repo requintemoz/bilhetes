@@ -255,7 +255,8 @@ a{color:inherit}
     var nota = [];
     if (ref) {
       var depois = ref.proximo_preco ? " Depois desta data: " + esc(String(ref.nome).replace(/\s*\(.*\)$/, "")) + " " + mt(ref.proximo_preco) + "." : "";
-      nota.push("Preços válidos até " + dataCurta(ref.lote_termina_em) + "." + depois);
+      var etiqueta = ref.lote ? String(ref.lote).split(",")[0].trim() + ": preços" : "Preços";
+      nota.push(etiqueta + " válidos até " + dataCurta(ref.lote_termina_em) + "." + depois);
     }
     if (gratis) nota.push("Crianças até 3 anos não pagam.");
     return { html: linhas.join(""), nota: nota };
